@@ -396,10 +396,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
   <!-- RECORD PAGE -->
   <div id="page-record" class="page active">
-    <div id="safety-banner" class="safety-banner" style="display:none;">
-      <p>⚠️ <strong>Back up your diary regularly.</strong> Tap Export → Download as text file to keep a safe copy.</p>
-      <button class="safety-close" onclick="dismissSafety()">✕</button>
-    </div>
+    <div id="safety-banner" style="display:none;"></div>
     <div style="padding:12px 0 0;">
       <div class="streak-bar" id="streak-bar" style="margin:0 0 0 0;display:none;">
         <div class="streak-flame">🔥</div>
@@ -692,6 +689,10 @@ async function init(){
 function updateOnlineStatus(){
   var offline=!navigator.onLine;
   document.getElementById('offline-banner').classList.toggle('show',offline);
+  if(!offline && currentUser){
+    // Auto sync when coming back online
+    syncEntries();
+  }
 }
 
 // ── PIN ──
@@ -782,12 +783,14 @@ async function showApp(){
   updateStats();
   updateStreak();
   checkAppendAvailable();
+
+  // Auto sync every 30 seconds when online
+  setInterval(function(){
+    if(navigator.onLine && currentUser) syncEntries();
+  }, 30000);
 }
 
-function dismissSafety(){
-  localStorage.setItem('mdd_safety_dismissed','1');
-  document.getElementById('safety-banner').style.display='none';
-}
+function dismissSafety(){ document.getElementById('safety-banner').style.display='none'; }
 
 // ── AUTH ──
 function switchAuthTab(t){
@@ -856,6 +859,21 @@ function closeUserMenu(e){if(!e||e.target===document.getElementById('user-menu')
 async function syncEntries(){
   if(!currentUser||!navigator.onLine) return;
   setSyncStatus('Syncing…');
+
+  // Push any local-only entries (id is a timestamp number, cloud ids are sequential small numbers)
+  var local=getCached();
+  var localOnly=local.filter(function(e){ return typeof e.id === 'number' && e.id > 1000000000000; });
+  for(var i=0;i<localOnly.length;i++){
+    var e=localOnly[i];
+    var {data:ins}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:e.date,day_name:e.dayName,time:e.time,topic:e.topic,text:e.text}).select();
+    if(ins&&ins[0]){
+      // Update local id to cloud id
+      local=local.map(function(x){ return x.id===e.id?Object.assign({},x,{id:ins[0].id}):x; });
+      setCached(local);
+    }
+  }
+
+  // Pull latest from cloud
   var {data,error}=await sb.from('diary_entries').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:false});
   if(!error&&data){
     var mapped=data.map(function(r){return{id:r.id,date:r.date,dayName:r.day_name,time:r.time,topic:r.topic||'',text:r.text};});
