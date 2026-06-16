@@ -34,8 +34,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 /* ONBOARDING */
 #onboard-screen{display:none;flex-direction:column;min-height:100dvh;background:white;}
-.ob-slides{display:flex;flex:1;overflow:hidden;}
-.ob-slide{min-width:100%;padding:60px 32px 40px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex-shrink:0;}
+.ob-slides-wrapper{flex:1;overflow:hidden;position:relative;}
+.ob-slides{display:flex;width:300%;transition:transform 0.3s ease;}
+.ob-slide{width:33.333%;padding:60px 32px 40px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex-shrink:0;}
 .ob-icon{font-size:64px;margin-bottom:24px;}
 .ob-title{font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:12px;}
 .ob-text{font-size:15px;color:#666;line-height:1.7;max-width:280px;}
@@ -346,7 +347,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 <!-- ONBOARDING SCREEN -->
 <div id="onboard-screen">
-  <div class="ob-slides" id="ob-slides">
+  <div class="ob-slides-wrapper"><div class="ob-slides" id="ob-slides">
     <div class="ob-slide">
       <div class="ob-icon">🎙️</div>
       <div class="ob-title">Speak your thoughts</div>
@@ -362,7 +363,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <div class="ob-title">Safe in the cloud</div>
       <div class="ob-text">Your diary is saved to your account. Switch devices anytime — your entries are always there.</div>
     </div>
-  </div>
+  </div></div>
   <div class="ob-dots" id="ob-dots">
     <div class="ob-dot active" onclick="goSlide(0)"></div>
     <div class="ob-dot" onclick="goSlide(1)"></div>
@@ -732,8 +733,7 @@ function showOnboarding(){
 function goSlide(n){
   obSlide=n;
   var slides=document.getElementById('ob-slides');
-  slides.style.transition='transform 0.3s ease';
-  slides.style.transform='translateX(-'+(n*100)+'%)';
+  slides.style.transform='translateX(-'+(n*33.333)+'%)';
   document.querySelectorAll('.ob-dot').forEach(function(d,i){d.classList.toggle('active',i===n);});
   document.getElementById('ob-next').textContent=n===2?'Get started →':'Next →';
 }
