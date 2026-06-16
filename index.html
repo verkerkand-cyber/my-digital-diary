@@ -328,7 +328,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     </div>
     <div id="login-form">
       <div class="auth-field"><label>Email address</label><input type="email" id="login-email" placeholder="your@email.com"></div>
-      <div class="auth-field"><label>Password</label><input type="password" id="login-password" placeholder="Your password"></div>
+      <div class="auth-field"><label>Password</label><div style="position:relative;"><input type="password" id="login-password" placeholder="Your password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('login-password','login-eye')" type="button" id="login-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
       <button class="auth-submit" onclick="signIn()">Sign in</button>
       <div class="auth-msg" id="login-msg"></div>
       <div style="text-align:center;margin-top:14px;">
@@ -337,7 +337,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     </div>
     <div id="signup-form" style="display:none;">
       <div class="auth-field"><label>Email address</label><input type="email" id="signup-email" placeholder="your@email.com"></div>
-      <div class="auth-field"><label>Password (min 6 characters)</label><input type="password" id="signup-password" placeholder="Choose a password"></div>
+      <div class="auth-field"><label>Password (min 6 characters)</label><div style="position:relative;"><input type="password" id="signup-password" placeholder="Choose a password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('signup-password','signup-eye')" type="button" id="signup-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
       <button class="auth-submit" onclick="signUp()">Create account</button>
       <div class="auth-msg" id="signup-msg"></div>
     </div>
@@ -799,6 +799,13 @@ async function signIn(){
   else{msg.textContent='';} 
 }
 
+function togglePwd(inputId, btnId){
+  var input=document.getElementById(inputId);
+  var btn=document.getElementById(btnId);
+  if(input.type==='password'){input.type='text';btn.textContent='🙈';}
+  else{input.type='password';btn.textContent='👁️';}
+}
+
 async function forgotPassword(){
   var email=document.getElementById('login-email').value.trim();
   var msg=document.getElementById('login-msg');
@@ -813,10 +820,19 @@ async function signUp(){
   var email=document.getElementById('signup-email').value.trim();
   var pass=document.getElementById('signup-password').value;
   var msg=document.getElementById('signup-msg');
+  if(!email){msg.textContent='Please enter your email.';msg.className='auth-msg error';return;}
+  if(pass.length<6){msg.textContent='Password must be at least 6 characters.';msg.className='auth-msg error';return;}
   msg.textContent='Creating account…'; msg.className='auth-msg';
-  var {error}=await sb.auth.signUp({email,password:pass});
+  var {data,error}=await sb.auth.signUp({email,password:pass,options:{emailRedirectTo:null}});
   if(error){msg.textContent=error.message;msg.className='auth-msg error';}
-  else{msg.textContent='Account created! Check your email to confirm, then sign in.';msg.className='auth-msg success';}
+  else if(data&&data.user&&data.user.identities&&data.user.identities.length===0){
+    msg.textContent='An account with this email already exists. Please sign in.';msg.className='auth-msg error';
+  } else {
+    // Auto sign in after signup
+    msg.textContent='Account created! Signing you in…';msg.className='auth-msg success';
+    var {error:signinErr}=await sb.auth.signInWithPassword({email,password:pass});
+    if(signinErr){msg.textContent='Account created! Please sign in.';msg.className='auth-msg success';}
+  }
 }
 
 async function signOut(){
