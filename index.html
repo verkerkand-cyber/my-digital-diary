@@ -836,8 +836,13 @@ async function signIn(){
 function togglePwd(inputId, btnId){
   var input=document.getElementById(inputId);
   var btn=document.getElementById(btnId);
-  if(input.type==='password'){input.type='text';btn.textContent='🙈';}
-  else{input.type='password';btn.textContent='👁️';}
+  if(!input||!btn) return;
+  var isHidden=input.type==='password';
+  input.setAttribute('type', isHidden?'text':'password');
+  btn.textContent=isHidden?'🙈':'👁️';
+  var pos=input.value.length;
+  input.focus();
+  try{ input.setSelectionRange(pos,pos); }catch(e){}
 }
 
 async function forgotPassword(){
@@ -1165,7 +1170,7 @@ function renderDiary(filter){
       html+='<div class="entry-text">'+e.text+'</div><div class="entry-wc">'+wc+' words</div>';
       if(e.photos&&e.photos.length){
         html+='<div class="entry-photos">';
-        e.photos.forEach(function(url){html+='<div class="entry-photo" onclick="viewPhoto(''+url+'')"><img src="'+url+'" alt="diary photo" loading="lazy"></div>';});
+        e.photos.forEach(function(url){html+='<div class="entry-photo" onclick="viewPhoto(&quot;'+url+'&quot;)"><img src="'+url+'" alt="diary photo" loading="lazy"></div>';});
         html+='</div>';
       }
       html+='<div class="entry-actions"><button class="act-btn" onclick="playEntry('+e.id+')">▶ Play</button><button class="act-btn" onclick="openEditOverlay(\'diary\','+e.id+')">✏️ Edit</button><button class="act-btn danger" onclick="delEntry('+e.id+')">🗑 Delete</button></div></div>';
