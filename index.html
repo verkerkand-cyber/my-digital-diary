@@ -845,6 +845,7 @@ async function showApp(){
   updateStats();
   updateStreak();
   checkAppendAvailable();
+  await loadUserTier();
 
   // Auto sync every 30 seconds when online
   setInterval(function(){
@@ -1144,8 +1145,11 @@ function discardEntry(){
 async function saveEntry(){
   var t=transcript.trim();
   if(!t && !hasPendingPhotos()) return;
+  var entryAllowed=await canAddEntry();
+  if(!entryAllowed){showToast('Daily entry limit reached (20/day) — try again tomorrow');return;}
   var now=new Date();
   var tempId=Date.now();
+  var photoCountToSave=pendingPhotos.filter(function(p){return p;}).length;
   var photoUrls=await uploadPhotos(tempId);
   var entry={
     id:tempId,
@@ -1159,6 +1163,8 @@ async function saveEntry(){
   };
   var entries=getCached(); entries.unshift(entry); setCached(entries);
   await saveToCloud(entry);
+  await incrementEntryCount();
+  if(photoCountToSave>0) await incrementPhotoCount(photoCountToSave);
   clearPhotos();
   document.getElementById('save-btn').disabled=true;
   var btn=document.getElementById('save-btn'); btn.textContent='✅ Saved!'; btn.classList.add('saved');
@@ -1458,27 +1464,89 @@ function saveLang(){var s=document.getElementById('lang-select');if(s)localStora
 // ── PHOTOS ──
 var pendingPhotos = []; // {file, localUrl, cloudPath}
 
-function addPhoto(){
+async function addPhoto(){
   var grid=document.getElementById('photo-grid');
   var count=grid.querySelectorAll('.photo-thumb').length;
   if(count>=10){showToast('Maximum 10 photos per entry');return;}
+  var allowed=await canAddPhoto();
+  if(!allowed){showUpgradeModal();return;}
   document.getElementById('photo-input').click();
 }
 
-function takePhoto(){
+async function takePhoto(){
   var grid=document.getElementById('photo-grid');
   var count=grid.querySelectorAll('.photo-thumb').length;
   if(count>=10){showToast('Maximum 10 photos per entry');return;}
+  var allowed=await canAddPhoto();
+  if(!allowed){showUpgradeModal();return;}
   document.getElementById('photo-camera-input').click();
 }
 
-function handlePhotoSelect(input){
+function compressImage(file){
+  return new Promise(function(resolve){
+    var maxDim=1600; // long edge cap in pixels — good for phone/screen viewing
+    var quality=0.75; // JPEG quality, 0–1
+    // TODO (print-ready PDF feature, not yet built): when generating the $2 print-ready PDF export,
+    // consider re-compressing at a higher quality/larger maxDim (e.g. maxDim=2400-3000, quality=0.85-0.9)
+    // specifically for that export path, since print needs more detail than on-screen viewing.
+    // Everyday diary photos should stay compressed small as they are now — only the PDF export path
+    // should use higher quality, and only at export time, not on upload.
+    var img=new Image();
+    var reader=new FileReader();
+    reader.onload=function(e){
+      img.onload=function(){
+        var w=img.width,h=img.height;
+        if(w>maxDim||h>maxDim){
+          if(w>h){h=Math.round(h*(maxDim/w));w=maxDim;}
+          else{w=Math.round(w*(maxDim/h));h=maxDim;}
+        }
+        var canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        var ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,w,h);
+        canvas.toBlob(function(blob){
+          if(!blob){resolve(file);return;} // fallback to original if compression fails
+          var newName=file.name.replace(/\.[^.]+$/,'')+'.jpg';
+          var compressedFile=new File([blob],newName,{type:'image/jpeg'});
+          resolve(compressedFile);
+        },'image/jpeg',quality);
+      };
+      img.onerror=function(){resolve(file);}; // fallback to original if image fails to load
+      img.src=e.target.result;
+    };
+    reader.onerror=function(){resolve(file);};
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handlePhotoSelect(input){
   var files=Array.from(input.files);
   var grid=document.getElementById('photo-grid');
   var current=grid.querySelectorAll('.photo-thumb').length;
   var canAdd=10-current;
   files=files.slice(0,canAdd);
-  files.forEach(function(file){
+
+  // Also cap to the remaining daily tier allowance — a user could select multiple
+  // files at once (gallery picker supports multi-select), so re-check here too,
+  // not just at the button-tap stage.
+  await resetCountersIfNewDay();
+  var limit=currentPhotoLimit();
+  var pendingCount=pendingPhotos.filter(function(p){return p;}).length;
+  var remainingToday=limit-userTier.photos_today-pendingCount;
+  var hitDailyLimit=false;
+  if(remainingToday<=0){
+    input.value='';
+    showUpgradeModal();
+    return;
+  }
+  if(files.length>remainingToday){
+    files=files.slice(0,remainingToday);
+    hitDailyLimit=true;
+  }
+
+  for(var i=0;i<files.length;i++){
+    var originalFile=files[i];
+    var file=await compressImage(originalFile);
     var url=URL.createObjectURL(file);
     var idx=pendingPhotos.length;
     pendingPhotos.push({file:file,localUrl:url,cloudPath:null});
@@ -1487,9 +1555,10 @@ function handlePhotoSelect(input){
     div.id='photo-thumb-'+idx;
     div.innerHTML='<img src="'+url+'" alt="photo"><button class="photo-remove" onclick="removePhoto('+idx+')">✕</button>';
     grid.appendChild(div);
-  });
+  }
   input.value='';
   updateSaveAvailability();
+  if(hitDailyLimit) showUpgradeModal();
 }
 
 function removePhoto(idx){
@@ -1531,6 +1600,132 @@ async function uploadPhotos(entryId){
 function clearPhotos(){
   pendingPhotos=[];
   document.getElementById('photo-grid').innerHTML='';
+}
+
+// ── TIER / PHOTO LIMIT SYSTEM ──
+var userTier={
+  photo_tier:'free',
+  photos_today:0,
+  photos_today_date:null,
+  entries_today:0,
+  entries_today_date:null,
+  created_at:null
+};
+
+var TIER_LIMITS={ free:2, tier1:3, tier2:6, tier3:10 };
+var TIER_PRICES={ tier1:'$1.99/mo', tier2:'$3.99/mo', tier3:'$5.99/mo' };
+var ENTRY_DAILY_CAP=20;
+var FREE_TRIAL_DAYS=7;
+
+function todayStr(){ return new Date().toISOString().split('T')[0]; }
+
+async function loadUserTier(){
+  if(!currentUser) return;
+  var {data,error}=await sb.from('profiles').select('photo_tier,photos_today,photos_today_date,entries_today,entries_today_date,created_at').eq('id',currentUser.id).single();
+  if(error||!data) return; // fail silently — don't block app usage if this lookup fails
+  userTier.photo_tier=data.photo_tier||'free';
+  userTier.photos_today=data.photos_today||0;
+  userTier.photos_today_date=data.photos_today_date;
+  userTier.entries_today=data.entries_today||0;
+  userTier.entries_today_date=data.entries_today_date;
+  userTier.created_at=data.created_at;
+  await resetCountersIfNewDay();
+}
+
+async function resetCountersIfNewDay(){
+  var today=todayStr();
+  var needsUpdate=false;
+  var updates={};
+  if(userTier.photos_today_date!==today){
+    userTier.photos_today=0; userTier.photos_today_date=today;
+    updates.photos_today=0; updates.photos_today_date=today; needsUpdate=true;
+  }
+  if(userTier.entries_today_date!==today){
+    userTier.entries_today=0; userTier.entries_today_date=today;
+    updates.entries_today=0; updates.entries_today_date=today; needsUpdate=true;
+  }
+  if(needsUpdate&&currentUser){
+    await sb.from('profiles').update(updates).eq('id',currentUser.id);
+  }
+}
+
+function isInFreeTrial(){
+  if(!userTier.created_at) return false;
+  var created=new Date(userTier.created_at);
+  var daysSince=(Date.now()-created.getTime())/(1000*60*60*24);
+  return daysSince<FREE_TRIAL_DAYS;
+}
+
+function currentPhotoLimit(){
+  // During the first 7 days, everyone gets the free-tier photo allowance regardless of paid tier,
+  // since the free trial is meant to showcase the app before any upgrade decision.
+  if(isInFreeTrial()&&userTier.photo_tier==='free') return TIER_LIMITS.free;
+  return TIER_LIMITS[userTier.photo_tier]||TIER_LIMITS.free;
+}
+
+async function canAddPhoto(){
+  await resetCountersIfNewDay();
+  var limit=currentPhotoLimit();
+  var wouldBe=userTier.photos_today+pendingPhotos.filter(function(p){return p;}).length+1;
+  return wouldBe<=limit;
+}
+
+async function canAddEntry(){
+  await resetCountersIfNewDay();
+  return userTier.entries_today<ENTRY_DAILY_CAP;
+}
+
+async function incrementPhotoCount(n){
+  if(!currentUser) return;
+  userTier.photos_today+=n;
+  await sb.from('profiles').update({photos_today:userTier.photos_today,photos_today_date:userTier.photos_today_date}).eq('id',currentUser.id);
+}
+
+async function incrementEntryCount(){
+  if(!currentUser) return;
+  userTier.entries_today+=1;
+  await sb.from('profiles').update({entries_today:userTier.entries_today,entries_today_date:userTier.entries_today_date}).eq('id',currentUser.id);
+}
+
+function showUpgradeModal(){
+  var existing=document.getElementById('upgrade-modal');
+  if(existing) existing.remove();
+  var limit=currentPhotoLimit();
+  var modal=document.createElement('div');
+  modal.id='upgrade-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  modal.innerHTML=
+    '<div style="background:#fff;border-radius:18px;max-width:400px;width:100%;padding:24px;max-height:85vh;overflow-y:auto;">'+
+      '<h3 style="margin:0 0 8px;color:#534AB7;">📸 Photo limit reached</h3>'+
+      '<p style="font-size:14px;color:#555;margin:0 0 16px;">You\'ve used your '+limit+' free photo'+(limit===1?'':'s')+' for today. Your diary entries (voice or typed) are always unlimited — this limit is just for photos.</p>'+
+      '<p style="font-size:13px;color:#777;margin:0 0 16px;">Storing and serving photos costs us real money as our user base grows, so we keep a small free daily allowance and offer paid tiers for people who want to add more photos each day.</p>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;">'+
+        '<tr style="border-bottom:1px solid #eee;"><th style="text-align:left;padding:6px 4px;">Plan</th><th style="text-align:left;padding:6px 4px;">Photos/day</th><th style="text-align:left;padding:6px 4px;">Price</th></tr>'+
+        '<tr style="border-bottom:1px solid #f3f3f3;"><td style="padding:6px 4px;">Free</td><td style="padding:6px 4px;">2</td><td style="padding:6px 4px;">$0</td></tr>'+
+        '<tr style="border-bottom:1px solid #f3f3f3;"><td style="padding:6px 4px;">Tier 1</td><td style="padding:6px 4px;">3</td><td style="padding:6px 4px;">'+TIER_PRICES.tier1+'</td></tr>'+
+        '<tr style="border-bottom:1px solid #f3f3f3;"><td style="padding:6px 4px;">Tier 2</td><td style="padding:6px 4px;">6</td><td style="padding:6px 4px;">'+TIER_PRICES.tier2+'</td></tr>'+
+        '<tr><td style="padding:6px 4px;">Tier 3</td><td style="padding:6px 4px;">10 (max)</td><td style="padding:6px 4px;">'+TIER_PRICES.tier3+'</td></tr>'+
+      '</table>'+
+      '<button onclick="selectUpgradeTier(\'tier1\')" style="width:100%;padding:12px;margin-bottom:8px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Upgrade to Tier 1 — '+TIER_PRICES.tier1+'</button>'+
+      '<button onclick="selectUpgradeTier(\'tier2\')" style="width:100%;padding:12px;margin-bottom:8px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Upgrade to Tier 2 — '+TIER_PRICES.tier2+'</button>'+
+      '<button onclick="selectUpgradeTier(\'tier3\')" style="width:100%;padding:12px;margin-bottom:8px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Upgrade to Tier 3 — '+TIER_PRICES.tier3+'</button>'+
+      '<button onclick="closeUpgradeModal()" style="width:100%;padding:12px;background:none;color:#888;border:none;">Maybe later</button>'+
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+function closeUpgradeModal(){
+  var m=document.getElementById('upgrade-modal');
+  if(m) m.remove();
+}
+
+function selectUpgradeTier(tier){
+  // Placeholder — real PayFast/Stripe payment integration not yet built.
+  // This is where a payment provider checkout would be triggered, and the
+  // user's profiles.photo_tier would only be updated server-side after a
+  // verified successful payment (never set the tier directly from the browser).
+  closeUpgradeModal();
+  showToast('Payment not set up yet — '+tier+' selected for testing only');
 }
 
 function viewPhoto(url){
