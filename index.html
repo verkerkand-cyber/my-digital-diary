@@ -107,6 +107,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .entry-photos{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:8px;}
 .entry-photo{aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;}
 .entry-photo img{width:100%;height:100%;object-fit:cover;}
+.entry-photo.queued{display:flex;align-items:center;justify-content:center;background:#F4F3F8;cursor:default;}
+.entry-photo.queued .queued-spinner{width:22px;height:22px;border:3px solid #D1CFF0;border-top-color:#534AB7;border-radius:50%;animation:mdd-spin 0.8s linear infinite;}
+@keyframes mdd-spin{to{transform:rotate(360deg);}}
 .photo-viewer{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:800;display:none;align-items:center;justify-content:center;flex-direction:column;}
 .photo-viewer.show{display:flex;}
 .photo-viewer img{max-width:95%;max-height:85vh;object-fit:contain;border-radius:8px;}
@@ -590,6 +593,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         </select>
       </div>
       <div class="set-card">
+        <h3>📶 Photo uploads</h3>
+        <p>Save mobile data by only uploading photos when connected to WiFi. Your diary text always saves and syncs normally either way.</p>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#333;margin-top:8px;cursor:pointer;">
+          <input type="checkbox" id="wifi-only-toggle" onchange="saveWifiOnlyPref()" style="width:18px;height:18px;">
+          Only upload photos on WiFi
+        </label>
+        <p id="queued-photo-indicator" style="display:none;margin-top:10px;font-size:13px;color:#534AB7;font-weight:600;"></p>
+      </div>
+      <div class="set-card">
         <h3>🔒 PIN lock</h3>
         <p>Protect your diary with a 4-digit PIN.</p>
         <div class="pin-row"><input class="pin-input" id="new-pin" type="password" maxlength="4" placeholder="••••" inputmode="numeric"></div>
@@ -840,16 +852,24 @@ async function showApp(){
   if('speechSynthesis' in window){window.speechSynthesis.onvoiceschanged=loadVoices;loadVoices();}
   var sp=localStorage.getItem('mdd_spd'); if(sp){document.getElementById('speed-slider').value=sp;document.getElementById('speed-val').textContent=parseFloat(sp).toFixed(2)+'x';}
   var lg=localStorage.getItem('mdd_lang'); if(lg){var ls=document.getElementById('lang-select');if(ls)ls.value=lg;}
+  loadWifiOnlyPref();
 
   await syncEntries();
   updateStats();
   updateStreak();
   checkAppendAvailable();
   await loadUserTier();
+  await updateQueuedPhotoIndicator();
+  await processWifiQueue();
+  checkBackupAge();
 
   // Auto sync every 30 seconds when online
   setInterval(function(){
-    if(navigator.onLine && currentUser) syncEntries();
+    if(navigator.onLine && currentUser){
+      syncEntries();
+      processWifiQueue();
+      checkBackupAge();
+    }
   }, 30000);
 }
 
@@ -1149,8 +1169,11 @@ async function saveEntry(){
   if(!entryAllowed){showToast('Daily entry limit reached (20/day) — try again tomorrow');return;}
   var now=new Date();
   var tempId=Date.now();
-  var photoCountToSave=pendingPhotos.filter(function(p){return p;}).length;
-  var photoUrls=await uploadPhotos(tempId);
+  var photosToProcess=pendingPhotos.filter(function(p){return p;});
+
+  // 1) Save the entry itself FIRST, with no photos attached yet, and with no dependency
+  //    on anything photo-related succeeding. The text/voice entry is the priority and must
+  //    never be blocked, delayed, or lost because of a photo upload/queue decision.
   var entry={
     id:tempId,
     date:now.toISOString().split('T')[0],
@@ -1158,13 +1181,12 @@ async function saveEntry(){
     time:now.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}),
     topic:document.getElementById('topic-field').value.trim(),
     text:t,
-    photos:photoUrls,
+    photos:[],
     pendingSync:true
   };
   var entries=getCached(); entries.unshift(entry); setCached(entries);
   await saveToCloud(entry);
   await incrementEntryCount();
-  if(photoCountToSave>0) await incrementPhotoCount(photoCountToSave);
   clearPhotos();
   document.getElementById('save-btn').disabled=true;
   var btn=document.getElementById('save-btn'); btn.textContent='✅ Saved!'; btn.classList.add('saved');
@@ -1178,6 +1200,69 @@ async function saveEntry(){
   },2000);
   updateStats();updateStreak();checkAppendAvailable();
   showToast('Entry saved! 📔');
+
+  // 2) AFTER the entry is safely saved, handle photos. Wrapped so that absolutely nothing
+  //    here — a prompt, IndexedDB, an upload failure, anything — can ever undo or block the
+  //    entry that's already saved above. Worst case if this whole block fails: the entry
+  //    saves with no photo, which is recoverable (photo can be added via Edit), versus the
+  //    old risk of losing the entry text itself, which is not recoverable.
+  if(photosToProcess.length>0){
+    try{
+      await handlePhotosAfterEntrySaved(tempId,photosToProcess);
+    }catch(e){
+      showToast('Entry saved, but there was an issue with the photo — you can try adding it again via Edit');
+    }
+  }
+}
+
+async function handlePhotosAfterEntrySaved(entryId,photos){
+  var wifiOnly=isWifiOnlyEnabled();
+  var onWifi=likelyOnWifi();
+  var shouldPromptForData = wifiOnly && onWifi!==true; // prompt unless we're confident it's WiFi
+
+  if(shouldPromptForData){
+    var choice=await showDataChoicePrompt();
+    if(choice==='wait'){
+      for(var i=0;i<photos.length;i++){
+        await queuePhotoForWifi(photos[i].file,entryId);
+      }
+      if(!localStorage.getItem('mdd_last_backup')) localStorage.setItem('mdd_last_backup',Date.now().toString());
+      await updateQueuedPhotoIndicator();
+      showToast('Photo'+(photos.length===1?'':'s')+' saved on your phone — will upload once you\'re on WiFi');
+      return;
+    }
+    // 'mobile' chosen — fall through and upload normally below
+  }
+
+  // Upload immediately (either WiFi-only is off, we're confident we're on WiFi,
+  // or the person explicitly chose to use mobile data)
+  var urls=[];
+  for(var i=0;i<photos.length;i++){
+    var p=photos[i];
+    var ext=p.file.name.split('.').pop()||'jpg';
+    var path=currentUser.id+'/'+entryId+'/'+Date.now()+'_'+i+'.'+ext;
+    var {error}=await sb.storage.from('diary-photos').upload(path,p.file,{contentType:p.file.type});
+    if(!error){
+      var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
+      urls.push(urlData.publicUrl);
+    }
+  }
+  if(urls.length>0){
+    await attachQueuedPhotoUrlsToEntry(entryId,urls);
+    localStorage.setItem('mdd_last_backup',Date.now().toString());
+  }
+  await incrementPhotoCount(photos.length);
+}
+
+async function attachQueuedPhotoUrlsToEntry(entryId,urls){
+  var entries=getCached();
+  var entry=entries.find(function(e){return e.id===entryId;});
+  if(entry){
+    entry.photos=(entry.photos||[]).concat(urls);
+    setCached(entries);
+    await sb.from('diary_entries').update({photos:entry.photos}).eq('id',entryId).eq('user_id',currentUser.id);
+    renderDiary();
+  }
 }
 
 // ── STREAK ──
@@ -1254,17 +1339,43 @@ function renderDiary(filter){
       html+='<div class="diary-entry"><span class="entry-time">🕐 '+e.time+'</span>';
       if(e.topic)html+='<div class="entry-topic">'+e.topic+'</div>';
       html+='<div class="entry-text">'+e.text+'</div><div class="entry-wc">'+wc+' words</div>';
+      html+='<div class="entry-photos" id="entry-photos-'+e.id+'">';
       if(e.photos&&e.photos.length){
-        html+='<div class="entry-photos">';
         e.photos.forEach(function(url){html+='<div class="entry-photo" onclick="viewPhoto(&quot;'+url+'&quot;)"><img src="'+url+'" alt="diary photo" loading="lazy"></div>';});
-        html+='</div>';
       }
+      html+='</div>';
       html+='<div class="entry-actions"><button class="act-btn" onclick="playEntry('+e.id+')">▶ Play</button><button class="act-btn" onclick="openEditOverlay(\'diary\','+e.id+')">✏️ Edit</button><button class="act-btn danger" onclick="delEntry('+e.id+')">🗑 Delete</button></div></div>';
     });
     html+='</div>';
   });
   c.innerHTML=html;
   if(curView==='page')renderPageView();
+  renderQueuedPhotoPlaceholders();
+}
+
+async function renderQueuedPhotoPlaceholders(){
+  try{
+    var queued=await getQueuedPhotos();
+    var entries=getCached();
+    var byEntry={};
+    queued.forEach(function(item){
+      if(currentUser&&item.userId&&item.userId!==currentUser.id) return; // safety: only show this account's own queue
+      if(!byEntry[item.entryId]) byEntry[item.entryId]=0;
+      byEntry[item.entryId]++;
+    });
+    entries.forEach(function(e){
+      var el=document.getElementById('entry-photos-'+e.id);
+      if(!el) return; // entry not currently rendered (e.g. filtered out by search) — fine to skip
+      var hasUploaded=e.photos&&e.photos.length>0;
+      var queuedCount=byEntry[e.id]||0;
+      if(!hasUploaded&&!queuedCount){ el.style.display='none'; return; }
+      var slots='';
+      for(var i=0;i<queuedCount;i++){
+        slots+='<div class="entry-photo queued" title="Waiting to upload"><div class="queued-spinner"></div></div>';
+      }
+      if(slots) el.insertAdjacentHTML('beforeend',slots);
+    });
+  }catch(e){ /* non-critical visual enhancement — fail silently rather than disrupt diary rendering */ }
 }
 
 function searchDiary(v){renderDiary(v||null);}
@@ -1460,6 +1571,217 @@ function getVoice(){var s=localStorage.getItem('mdd_voice')||'';return s?voices.
 function getSpeed(){return parseFloat(localStorage.getItem('mdd_spd')||'0.95');}
 function testVoice(){window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance('Hi, this is how your diary will sound when played back.');var v=getVoice();if(v)u.voice=v;u.rate=getSpeed();window.speechSynthesis.speak(u);}
 function saveLang(){var s=document.getElementById('lang-select');if(s)localStorage.setItem('mdd_lang',s.value);}
+
+// ── WIFI-ONLY PHOTO QUEUE SYSTEM ──
+// Uses IndexedDB (not localStorage) since photo blobs are too large/binary for localStorage's
+// small text-only quota. This lets photos be queued on-device when the user opts to wait for
+// WiFi, then auto-uploaded once a good connection is detected.
+
+var WIFI_DB_NAME='mdd_photo_queue', WIFI_DB_VERSION=1, WIFI_STORE='queued_photos';
+var wifiDb=null;
+
+function openWifiQueueDB(){
+  return new Promise(function(resolve,reject){
+    if(wifiDb){resolve(wifiDb);return;}
+    var req=indexedDB.open(WIFI_DB_NAME,WIFI_DB_VERSION);
+    req.onupgradeneeded=function(e){
+      var db=e.target.result;
+      if(!db.objectStoreNames.contains(WIFI_STORE)){
+        db.createObjectStore(WIFI_STORE,{keyPath:'id',autoIncrement:true});
+      }
+    };
+    req.onsuccess=function(e){wifiDb=e.target.result;resolve(wifiDb);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+
+async function queuePhotoForWifi(file,entryId){
+  var db=await openWifiQueueDB();
+  return new Promise(function(resolve,reject){
+    var tx=db.transaction(WIFI_STORE,'readwrite');
+    var store=tx.objectStore(WIFI_STORE);
+    var record={file:file,entryId:entryId,queuedAt:Date.now(),userId:currentUser?currentUser.id:null};
+    var req=store.add(record);
+    req.onsuccess=function(){resolve(req.result);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+
+async function getQueuedPhotos(){
+  var db=await openWifiQueueDB();
+  return new Promise(function(resolve,reject){
+    var tx=db.transaction(WIFI_STORE,'readonly');
+    var store=tx.objectStore(WIFI_STORE);
+    var req=store.getAll();
+    req.onsuccess=function(){resolve(req.result||[]);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+
+async function deleteQueuedPhoto(id){
+  var db=await openWifiQueueDB();
+  return new Promise(function(resolve,reject){
+    var tx=db.transaction(WIFI_STORE,'readwrite');
+    var store=tx.objectStore(WIFI_STORE);
+    var req=store.delete(id);
+    req.onsuccess=function(){resolve();};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+
+function isWifiOnlyEnabled(){
+  return localStorage.getItem('mdd_wifi_only')==='1';
+}
+
+function saveWifiOnlyPref(){
+  var checked=document.getElementById('wifi-only-toggle').checked;
+  localStorage.setItem('mdd_wifi_only',checked?'1':'0');
+  showToast(checked?'Photos will only upload on WiFi':'Photos will upload on any connection');
+}
+
+function loadWifiOnlyPref(){
+  var el=document.getElementById('wifi-only-toggle');
+  if(el) el.checked=isWifiOnlyEnabled();
+}
+
+// Best-effort connection guess. navigator.connection is not supported on iOS Safari at all,
+// and even where supported, browsers don't always know for certain. Treated as a hint only —
+// the user always gets the final say via the prompt, never a silent decision.
+function likelyOnWifi(){
+  if(!navigator.onLine) return false;
+  var conn=navigator.connection||navigator.webkitConnection||navigator.mozConnection;
+  if(!conn) return null; // unknown — can't tell on this browser (e.g. iOS Safari)
+  if(conn.type) return conn.type==='wifi'||conn.type==='ethernet';
+  if(conn.effectiveType) return conn.effectiveType==='4g'; // rough heuristic only
+  return null;
+}
+
+function showDataChoicePrompt(){
+  return new Promise(function(resolve){
+    var existing=document.getElementById('data-choice-modal');
+    if(existing) existing.remove();
+    var modal=document.createElement('div');
+    modal.id='data-choice-modal';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+    modal.innerHTML=
+      '<div style="background:#fff;border-radius:18px;max-width:380px;width:100%;padding:24px;">'+
+        '<h3 style="margin:0 0 8px;color:#534AB7;">📶 Not on WiFi</h3>'+
+        '<p style="font-size:14px;color:#555;margin:0 0 16px;">You\'ve chosen to only upload photos on WiFi, and it looks like you might be on mobile data right now. What would you like to do with this photo?</p>'+
+        '<button id="dc-mobile-btn" style="width:100%;padding:12px;margin-bottom:8px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Upload now using mobile data</button>'+
+        '<button id="dc-wait-btn" style="width:100%;padding:12px;background:#F4F3F8;color:#534AB7;border:none;border-radius:12px;font-weight:600;">Wait for WiFi (24 hours max)</button>'+
+        '<p style="font-size:12px;color:#999;margin:12px 0 0;text-align:center;">If WiFi isn\'t found within 24 hours, we\'ll automatically back it up using mobile data instead — your photo is never left unprotected for long.</p>'+
+      '</div>';
+    document.body.appendChild(modal);
+    document.getElementById('dc-mobile-btn').onclick=function(){modal.remove();resolve('mobile');};
+    document.getElementById('dc-wait-btn').onclick=function(){modal.remove();resolve('wait');};
+  });
+}
+
+async function updateQueuedPhotoIndicator(){
+  var queued=await getQueuedPhotos();
+  var el=document.getElementById('queued-photo-indicator');
+  if(!el) return;
+  if(queued.length>0){
+    el.style.display='block';
+    el.textContent='📷 '+queued.length+' photo'+(queued.length===1?'':'s')+' waiting for WiFi';
+  } else {
+    el.style.display='none';
+  }
+}
+
+var QUEUE_FORCE_UPLOAD_MS = 24*60*60*1000; // 24 hours — after this, upload regardless of connection type, never leave a photo unprotected longer than this
+
+async function processWifiQueue(){
+  if(!navigator.onLine||!currentUser) return; // can't upload at all while fully offline, regardless of how old the queue item is
+  var onWifi=likelyOnWifi();
+  var queued=await getQueuedPhotos();
+  if(!queued.length) return;
+  var now=Date.now();
+  var forcedCount=0;
+  for(var i=0;i<queued.length;i++){
+    var item=queued[i];
+    if(item.userId&&item.userId!==currentUser.id) continue; // safety: don't upload another account's queued photo
+    var ageMs=now-item.queuedAt;
+    var pastDeadline=ageMs>=QUEUE_FORCE_UPLOAD_MS;
+    // Upload if: we're confidently on WiFi, OR connection type is unknown (e.g. iOS) and we're online,
+    // OR the 24-hour deadline has passed (force upload on any connection — guarantee, not optional).
+    var shouldUploadNow = (onWifi===true) || (onWifi===null) || pastDeadline;
+    if(!shouldUploadNow) continue; // confidently on mobile data and still within the 24-hour grace window — wait
+    try{
+      var ext=item.file.name.split('.').pop()||'jpg';
+      var path=currentUser.id+'/'+item.entryId+'/'+Date.now()+'_q'+item.id+'.'+ext;
+      var {error}=await sb.storage.from('diary-photos').upload(path,item.file,{contentType:item.file.type});
+      if(!error){
+        var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
+        await attachQueuedPhotoUrlToEntry(item.entryId,urlData.publicUrl);
+        await deleteQueuedPhoto(item.id);
+        await incrementPhotoCount(1);
+        localStorage.setItem('mdd_last_backup',Date.now().toString());
+        if(pastDeadline&&onWifi===false) forcedCount++;
+      }
+    }catch(e){ /* leave in queue, will retry next cycle */ }
+  }
+  await updateQueuedPhotoIndicator();
+  if(forcedCount>0){
+    showMobileDataBackupNotice(forcedCount);
+  }
+}
+
+function showMobileDataBackupNotice(count){
+  var existing=document.getElementById('mobile-backup-modal');
+  if(existing) existing.remove();
+  var modal=document.createElement('div');
+  modal.id='mobile-backup-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  modal.innerHTML=
+    '<div style="background:#fff;border-radius:18px;max-width:380px;width:100%;padding:24px;">'+
+      '<h3 style="margin:0 0 8px;color:#534AB7;">📶 Backing up using mobile data</h3>'+
+      '<p style="font-size:14px;color:#555;margin:0 0 16px;">'+count+' photo'+(count===1?' has been waiting':'s have been waiting')+' for WiFi for 24 hours, so to keep '+(count===1?'it':'them')+' safe we\'ve gone ahead and backed '+(count===1?'it':'them')+' up using your mobile data.</p>'+
+      '<button id="mb-ok-btn" style="width:100%;padding:12px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Got it</button>'+
+    '</div>';
+  document.body.appendChild(modal);
+  document.getElementById('mb-ok-btn').onclick=function(){modal.remove();};
+}
+
+async function attachQueuedPhotoUrlToEntry(entryId,url){
+  return attachQueuedPhotoUrlsToEntry(entryId,[url]);
+}
+
+function checkBackupAge(){
+  getQueuedPhotos().then(function(q){
+    if(!q.length) return; // nothing queued, no need to warn
+    var now=Date.now();
+    var oldest=Math.min.apply(null,q.map(function(item){return item.queuedAt;}));
+    var hoursSince=(now-oldest)/(1000*60*60);
+    // Photos past the 24-hour mark should already be force-uploaded by processWifiQueue whenever
+    // the device has ANY connection. The only way a photo is STILL queued past 24 hours is if the
+    // device has had no internet connection at all (not even mobile data) since it was queued —
+    // that's the one case truly outside the guarantee, and it's honest to say so rather than promise
+    // something that can't happen without any connection at all.
+    if(hoursSince>=24 && !navigator.onLine){
+      showBackupWarning(q.length,hoursSince>=48);
+    }
+  });
+}
+
+function showBackupWarning(count,noConnectionAtAll){
+  var existing=document.getElementById('backup-warn-modal');
+  if(existing) existing.remove();
+  var modal=document.createElement('div');
+  modal.id='backup-warn-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  var body=noConnectionAtAll
+    ? 'Your device has had no internet connection at all for a while, so '+(count===1?'this photo hasn\'t':'these photos haven\'t')+' been able to upload yet — not even on mobile data. As soon as you have any connection, it will upload automatically.'
+    : 'Your device appears to have no connection right now, so '+(count===1?'this photo is':'these photos are')+' waiting to upload. As soon as you\'re back online, this happens automatically — no action needed.';
+  modal.innerHTML=
+    '<div style="background:#fff;border-radius:18px;max-width:380px;width:100%;padding:24px;">'+
+      '<h3 style="margin:0 0 8px;color:#534AB7;">📷 '+count+' photo'+(count===1?'':'s')+' waiting to upload</h3>'+
+      '<p style="font-size:14px;color:#555;margin:0 0 16px;">'+body+'</p>'+
+      '<button id="bw-ok-btn" style="width:100%;padding:12px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Got it</button>'+
+    '</div>';
+  document.body.appendChild(modal);
+  document.getElementById('bw-ok-btn').onclick=function(){modal.remove();};
+}
 
 // ── PHOTOS ──
 var pendingPhotos = []; // {file, localUrl, cloudPath}
