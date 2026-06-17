@@ -434,7 +434,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div id="safety-banner" style="display:none;"></div>
     <div id="free-version-banner" style="display:none;background:linear-gradient(135deg,#534AB7,#7B72D8);color:#fff;border-radius:14px;padding:14px 16px;margin:12px 0 0;">
       <div style="font-weight:700;font-size:14px;margin-bottom:4px;">🎁 You're using the Free Version</div>
-      <div style="font-size:13px;opacity:0.9;">Unlimited voice & typed diary entries, completely free — no photos in this mode. Want photos too? Check Export for upgrade options.</div>
+      <div style="font-size:13px;opacity:0.9;">Unlimited voice & typed diary entries, completely free — no photos in this mode. Want photos too? Go to Export → Add more photos.</div>
     </div>
     <div style="padding:12px 0 0;">
       <div class="streak-bar" id="streak-bar" style="margin:0 0 0 0;display:none;">
@@ -516,6 +516,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="exp-row" onclick="importJSON()"><div class="exp-icon g">📥</div><div><div class="exp-row-label">Restore from backup</div><div class="exp-row-sub">Import a previous JSON backup</div></div></div>
       </div>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(this)">
+      <div class="exp-card">
+        <h3>📸 Add more photos</h3>
+        <p>Your free plan includes a daily photo allowance. Upgrade any time for more — your voice and typed entries are always unlimited either way.</p>
+        <div class="exp-row" onclick="showUpgradeModal()"><div class="exp-icon p">⬆️</div><div><div class="exp-row-label">View photo upgrade plans</div><div class="exp-row-sub">From <span id="exp-tier1-price"></span></div></div></div>
+      </div>
       <div class="exp-card">
         <h3>🎨 Customise your diary</h3>
         <p>Design your personal printed diary.</p>
@@ -1492,6 +1497,8 @@ function updateStats(){
   var e=getCached();
   document.getElementById('stat-entries').textContent=e.length;
   document.getElementById('stat-days').textContent=new Set(e.map(function(x){return x.date;})).size;
+  var priceSpan=document.getElementById('exp-tier1-price');
+  if(priceSpan) priceSpan.textContent=TIER_PRICES.tier1;
 }
 
 function exportText(){
@@ -1820,7 +1827,7 @@ async function addPhoto(){
   var count=grid.querySelectorAll('.photo-thumb').length;
   if(count>=10){showToast('Maximum 10 photos per entry');return;}
   var allowed=await canAddPhoto();
-  if(!allowed){showUpgradeModal();return;}
+  if(!allowed){showUpgradeModal('limit');return;}
   document.getElementById('photo-input').click();
 }
 
@@ -1829,7 +1836,7 @@ async function takePhoto(){
   var count=grid.querySelectorAll('.photo-thumb').length;
   if(count>=10){showToast('Maximum 10 photos per entry');return;}
   var allowed=await canAddPhoto();
-  if(!allowed){showUpgradeModal();return;}
+  if(!allowed){showUpgradeModal('limit');return;}
   document.getElementById('photo-camera-input').click();
 }
 
@@ -1887,7 +1894,7 @@ async function handlePhotoSelect(input){
   var hitDailyLimit=false;
   if(remainingToday<=0){
     input.value='';
-    showUpgradeModal();
+    showUpgradeModal('limit');
     return;
   }
   if(files.length>remainingToday){
@@ -1909,7 +1916,7 @@ async function handlePhotoSelect(input){
   }
   input.value='';
   updateSaveAvailability();
-  if(hitDailyLimit) showUpgradeModal();
+  if(hitDailyLimit) showUpgradeModal('limit');
 }
 
 function removePhoto(idx){
@@ -2052,17 +2059,29 @@ async function incrementEntryCount(){
   await sb.from('profiles').update({entries_today:userTier.entries_today,entries_today_date:userTier.entries_today_date}).eq('id',currentUser.id);
 }
 
-function showUpgradeModal(){
+function showUpgradeModal(reason){
   var existing=document.getElementById('upgrade-modal');
   if(existing) existing.remove();
   var limit=currentPhotoLimit();
   var modal=document.createElement('div');
   modal.id='upgrade-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  // Wording differs depending on how someone got here — hitting the actual daily limit
+  // while trying to add a photo is a different situation from just browsing pricing options
+  // ahead of time from the Export page, and showing "limit reached" in the latter case
+  // would be confusing and untrue.
+  var heading, intro;
+  if(reason==='limit'){
+    heading='📸 Photo limit reached';
+    intro='You\'ve used your '+limit+' free photo'+(limit===1?'':'s')+' for today. Your diary entries (voice or typed) are always unlimited — this limit is just for photos.';
+  } else {
+    heading='📸 Add more photos each day';
+    intro='Your free plan includes '+limit+' photo'+(limit===1?'':'s')+' per day, with unlimited voice and typed diary entries always. Upgrade any time to add more photos each day.';
+  }
   modal.innerHTML=
     '<div style="background:#fff;border-radius:18px;max-width:400px;width:100%;padding:24px;max-height:85vh;overflow-y:auto;">'+
-      '<h3 style="margin:0 0 8px;color:#534AB7;">📸 Photo limit reached</h3>'+
-      '<p style="font-size:14px;color:#555;margin:0 0 16px;">You\'ve used your '+limit+' free photo'+(limit===1?'':'s')+' for today. Your diary entries (voice or typed) are always unlimited — this limit is just for photos.</p>'+
+      '<h3 style="margin:0 0 8px;color:#534AB7;">'+heading+'</h3>'+
+      '<p style="font-size:14px;color:#555;margin:0 0 16px;">'+intro+'</p>'+
       '<p style="font-size:13px;color:#777;margin:0 0 16px;">Storing and serving photos costs us real money as our user base grows, so we keep a small free daily allowance and offer paid tiers for people who want to add more photos each day.</p>'+
       '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;">'+
         '<tr style="border-bottom:1px solid #eee;"><th style="text-align:left;padding:6px 4px;">Plan</th><th style="text-align:left;padding:6px 4px;">Photos/day</th><th style="text-align:left;padding:6px 4px;">Price</th></tr>'+
