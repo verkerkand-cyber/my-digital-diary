@@ -690,6 +690,42 @@ async function init(){
   var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
   if(isIOS) document.getElementById('ios-hint').style.display='block';
 
+  // Check directly if this page load is a password recovery link BEFORE anything else,
+  // since Supabase can fire the PASSWORD_RECOVERY event before any listener is attached.
+  var urlHasRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
+  if(urlHasRecovery){
+    document.getElementById('pin-screen').style.display='none';
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('onboard-screen').style.display='none';
+    document.getElementById('app-screen').style.display='none';
+    document.getElementById('reset-screen').style.display='flex';
+  }
+
+  // Attach the listener BEFORE awaiting getSession, so we never miss an early-firing event
+  sb.auth.onAuthStateChange(function(event,session){
+    if(event==='PASSWORD_RECOVERY'){
+      document.getElementById('pin-screen').style.display='none';
+      document.getElementById('auth-screen').style.display='none';
+      document.getElementById('onboard-screen').style.display='none';
+      document.getElementById('app-screen').style.display='none';
+      document.getElementById('reset-screen').style.display='flex';
+      return;
+    }
+    if(event==='SIGNED_IN'&&session){
+      if(document.getElementById('reset-screen').style.display==='flex') return; // don't jump to app mid-reset
+      currentUser=session.user;
+      var showed=localStorage.getItem('mdd_ob_done');
+      if(!showed) showOnboarding(); else showApp();
+    }
+    if(event==='SIGNED_OUT'){
+      currentUser=null;
+      document.getElementById('app-screen').style.display='none';
+      document.getElementById('auth-screen').style.display='flex';
+    }
+  });
+
+  if(urlHasRecovery) return; // reset-screen is already showing, skip the normal session check below
+
   // Check PIN
   var pin=localStorage.getItem('mdd_pin');
   if(pin){
@@ -710,26 +746,6 @@ async function init(){
   } else {
     document.getElementById('auth-screen').style.display='flex';
   }
-
-  sb.auth.onAuthStateChange(function(event,session){
-    if(event==='PASSWORD_RECOVERY'){
-      document.getElementById('auth-screen').style.display='none';
-      document.getElementById('onboard-screen').style.display='none';
-      document.getElementById('app-screen').style.display='none';
-      document.getElementById('reset-screen').style.display='flex';
-      return;
-    }
-    if(event==='SIGNED_IN'&&session){
-      currentUser=session.user;
-      var showed=localStorage.getItem('mdd_ob_done');
-      if(!showed) showOnboarding(); else showApp();
-    }
-    if(event==='SIGNED_OUT'){
-      currentUser=null;
-      document.getElementById('app-screen').style.display='none';
-      document.getElementById('auth-screen').style.display='flex';
-    }
-  });
 }
 
 function updateOnlineStatus(){
