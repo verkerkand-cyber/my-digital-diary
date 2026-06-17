@@ -97,6 +97,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .save-btn.saved{background:#16A34A;}
 .delete-btn{width:100%;padding:12px;background:white;color:#DC2626;border:1.5px solid #FECACA;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;display:none;margin-bottom:8px;}
 .append-btn{width:100%;padding:12px;background:white;color:#534AB7;border:1.5px solid #E0DDFF;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;display:none;}
+.photo-section{margin-bottom:10px;}
+.photo-btn{width:100%;padding:11px;background:white;color:#534AB7;border:1.5px solid #E0DDFF;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;}
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;}
+.photo-thumb{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#F0EFF8;}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;}
+.photo-remove{position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.5);color:white;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.photo-uploading{position:absolute;inset:0;background:rgba(83,74,183,0.5);display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:600;}
+.entry-photos{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:8px;}
+.entry-photo{aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;}
+.entry-photo img{width:100%;height:100%;object-fit:cover;}
+.photo-viewer{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:800;display:none;align-items:center;justify-content:center;flex-direction:column;}
+.photo-viewer.show{display:flex;}
+.photo-viewer img{max-width:95%;max-height:85vh;object-fit:contain;border-radius:8px;}
+.photo-viewer-close{position:absolute;top:16px;right:16px;background:none;border:none;color:white;font-size:28px;cursor:pointer;}
 .hint{font-size:12px;color:#999;text-align:center;line-height:1.6;padding:0 8px;}
 .type-area{display:none;}
 .type-area.show{display:block;}
@@ -419,6 +433,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="word-count" id="word-count"></div>
         <button class="edit-inline-btn" id="edit-inline-btn" onclick="openEditOverlay('inline')">✏️ Edit text</button>
       </div>
+      <div class="photo-section" id="photo-section">
+        <div class="photo-grid" id="photo-grid"></div>
+        <button class="photo-btn" onclick="addPhoto()" id="photo-add-btn">📷 Add photo (up to 10)</button>
+      </div>
+      <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoSelect(this)">
       <div class="type-area" id="type-area">
         <textarea class="manual-input" id="manual-input" placeholder="Type your diary entry here…" oninput="onManualType()"></textarea>
         <div class="word-count" id="word-count-type"></div>
@@ -618,6 +637,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
 </div>
 
+<div class="photo-viewer" id="photo-viewer">
+  <button class="photo-viewer-close" onclick="closePhotoViewer()">✕</button>
+  <img id="photo-viewer-img" src="" alt="diary photo">
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -876,7 +899,7 @@ async function syncEntries(){
   // Pull latest from cloud
   var {data,error}=await sb.from('diary_entries').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:false});
   if(!error&&data){
-    var mapped=data.map(function(r){return{id:r.id,date:r.date,dayName:r.day_name,time:r.time,topic:r.topic||'',text:r.text};});
+    var mapped=data.map(function(r){return{id:r.id,date:r.date,dayName:r.day_name,time:r.time,topic:r.topic||'',text:r.text,photos:r.photos||[]};});
     setCached(mapped);
     setSyncStatus('✓ Synced');
     setTimeout(function(){setSyncStatus('');},2000);
@@ -887,7 +910,7 @@ function setSyncStatus(s){document.getElementById('sync-status').textContent=s;}
 
 async function saveToCloud(entry){
   if(!currentUser||!navigator.onLine) return;
-  var {error}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:entry.date,day_name:entry.dayName,time:entry.time,topic:entry.topic,text:entry.text});
+  var {error}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:entry.date,day_name:entry.dayName,time:entry.time,topic:entry.topic,text:entry.text,photos:entry.photos||[]});
   if(error) showToast('Sync error — saved locally');
   else setSyncStatus('✓ Saved');
 }
@@ -1031,22 +1054,27 @@ function discardEntry(){
   document.getElementById('manual-input').value='';
   document.getElementById('word-count').textContent='';
   document.getElementById('word-count-type').textContent='';
+  clearPhotos();
   showToast('Note deleted');
 }
 
 async function saveEntry(){
   var t=transcript.trim(); if(!t) return;
   var now=new Date();
+  var entryId=Date.now();
+  var photoUrls=await uploadPhotos(entryId);
   var entry={
-    id:Date.now(),
+    id:entryId,
     date:now.toISOString().split('T')[0],
     dayName:now.toLocaleDateString('en-ZA',{weekday:'long'}),
     time:now.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}),
     topic:document.getElementById('topic-field').value.trim(),
-    text:t
+    text:t,
+    photos:photoUrls
   };
   var entries=getCached(); entries.unshift(entry); setCached(entries);
   await saveToCloud(entry);
+  clearPhotos();
   document.getElementById('save-btn').disabled=true;
   var btn=document.getElementById('save-btn'); btn.textContent='✅ Saved!'; btn.classList.add('saved');
   setTimeout(function(){
@@ -1134,7 +1162,13 @@ function renderDiary(filter){
       var wc=e.text.trim().split(/\s+/).filter(function(w){return w.length>0;}).length;
       html+='<div class="diary-entry"><span class="entry-time">🕐 '+e.time+'</span>';
       if(e.topic)html+='<div class="entry-topic">'+e.topic+'</div>';
-      html+='<div class="entry-text">'+e.text+'</div><div class="entry-wc">'+wc+' words</div><div class="entry-actions"><button class="act-btn" onclick="playEntry('+e.id+')">▶ Play</button><button class="act-btn" onclick="openEditOverlay(\'diary\','+e.id+')">✏️ Edit</button><button class="act-btn danger" onclick="delEntry('+e.id+')">🗑 Delete</button></div></div>';
+      html+='<div class="entry-text">'+e.text+'</div><div class="entry-wc">'+wc+' words</div>';
+      if(e.photos&&e.photos.length){
+        html+='<div class="entry-photos">';
+        e.photos.forEach(function(url){html+='<div class="entry-photo" onclick="viewPhoto(''+url+'')"><img src="'+url+'" alt="diary photo" loading="lazy"></div>';});
+        html+='</div>';
+      }
+      html+='<div class="entry-actions"><button class="act-btn" onclick="playEntry('+e.id+')">▶ Play</button><button class="act-btn" onclick="openEditOverlay(\'diary\','+e.id+')">✏️ Edit</button><button class="act-btn danger" onclick="delEntry('+e.id+')">🗑 Delete</button></div></div>';
     });
     html+='</div>';
   });
@@ -1205,7 +1239,12 @@ document.addEventListener('DOMContentLoaded',function(){
 function playEntry(id){
   var e=getCached().find(function(x){return x.id===id;});if(!e||!('speechSynthesis' in window)){showToast('Playback not supported');return;}
   window.speechSynthesis.cancel();
-  var utt=new SpeechSynthesisUtterance((e.topic?e.topic+'. ':'')+e.time+'. '+e.text);
+  var d=new Date(e.date+'T12:00:00');
+  var dayName=d.toLocaleDateString('en-ZA',{weekday:'long'});
+  var dateStr=d.toLocaleDateString('en-ZA',{day:'numeric',month:'long'});
+  var intro=dayName+', '+dateStr+', '+e.time+'. ';
+  if(e.topic) intro+=e.topic+'. ';
+  var utt=new SpeechSynthesisUtterance(intro+e.text);
   var v=getVoice();if(v)utt.voice=v;else utt.lang='en-ZA';
   utt.rate=getSpeed();window.speechSynthesis.speak(utt);showToast('Playing entry…');
 }
@@ -1330,6 +1369,76 @@ function getVoice(){var s=localStorage.getItem('mdd_voice')||'';return s?voices.
 function getSpeed(){return parseFloat(localStorage.getItem('mdd_spd')||'0.95');}
 function testVoice(){window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance('Hi, this is how your diary will sound when played back.');var v=getVoice();if(v)u.voice=v;u.rate=getSpeed();window.speechSynthesis.speak(u);}
 function saveLang(){var s=document.getElementById('lang-select');if(s)localStorage.setItem('mdd_lang',s.value);}
+
+// ── PHOTOS ──
+var pendingPhotos = []; // {file, localUrl, cloudPath}
+
+function addPhoto(){
+  var grid=document.getElementById('photo-grid');
+  var count=grid.querySelectorAll('.photo-thumb').length;
+  if(count>=10){showToast('Maximum 10 photos per entry');return;}
+  document.getElementById('photo-input').click();
+}
+
+function handlePhotoSelect(input){
+  var files=Array.from(input.files);
+  var grid=document.getElementById('photo-grid');
+  var current=grid.querySelectorAll('.photo-thumb').length;
+  var canAdd=10-current;
+  files=files.slice(0,canAdd);
+  files.forEach(function(file){
+    var url=URL.createObjectURL(file);
+    var idx=pendingPhotos.length;
+    pendingPhotos.push({file:file,localUrl:url,cloudPath:null});
+    var div=document.createElement('div');
+    div.className='photo-thumb';
+    div.id='photo-thumb-'+idx;
+    div.innerHTML='<img src="'+url+'" alt="photo"><button class="photo-remove" onclick="removePhoto('+idx+')">✕</button>';
+    grid.appendChild(div);
+  });
+  input.value='';
+}
+
+function removePhoto(idx){
+  pendingPhotos[idx]=null;
+  var el=document.getElementById('photo-thumb-'+idx);
+  if(el) el.remove();
+}
+
+async function uploadPhotos(entryId){
+  if(!currentUser||!pendingPhotos.length) return [];
+  var urls=[];
+  for(var i=0;i<pendingPhotos.length;i++){
+    var p=pendingPhotos[i];
+    if(!p) continue;
+    var ext=p.file.name.split('.').pop()||'jpg';
+    var path=currentUser.id+'/'+entryId+'/'+Date.now()+'_'+i+'.'+ext;
+    var thumb=document.getElementById('photo-thumb-'+i);
+    if(thumb){var ov=document.createElement('div');ov.className='photo-uploading';ov.textContent='Uploading…';thumb.appendChild(ov);}
+    var {data,error}=await sb.storage.from('diary-photos').upload(path,p.file,{contentType:p.file.type});
+    if(!error){
+      var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
+      urls.push(urlData.publicUrl);
+    }
+    if(thumb){var ov2=thumb.querySelector('.photo-uploading');if(ov2)ov2.remove();}
+  }
+  return urls;
+}
+
+function clearPhotos(){
+  pendingPhotos=[];
+  document.getElementById('photo-grid').innerHTML='';
+}
+
+function viewPhoto(url){
+  document.getElementById('photo-viewer-img').src=url;
+  document.getElementById('photo-viewer').classList.add('show');
+}
+
+function closePhotoViewer(){
+  document.getElementById('photo-viewer').classList.remove('show');
+  document.getElementById('photo-viewer-img').src='';
+}
 
 function openSupport(){
   var email='verkerkand@gmail.com';
