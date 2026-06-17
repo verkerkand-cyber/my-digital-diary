@@ -445,6 +445,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="word-count" id="word-count"></div>
         <button class="edit-inline-btn" id="edit-inline-btn" onclick="openEditOverlay('inline')">✏️ Edit text</button>
       </div>
+      <div class="type-area" id="type-area">
+        <textarea class="manual-input" id="manual-input" placeholder="Type your diary entry here…" oninput="onManualType()"></textarea>
+        <div class="word-count" id="word-count-type"></div>
+      </div>
+      <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">✏️ Type instead</button>
       <div class="photo-section" id="photo-section">
         <div class="photo-grid" id="photo-grid"></div>
         <div style="display:flex;gap:8px;">
@@ -454,11 +459,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
       <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoSelect(this)">
       <input type="file" id="photo-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(this)">
-      <div class="type-area" id="type-area">
-        <textarea class="manual-input" id="manual-input" placeholder="Type your diary entry here…" oninput="onManualType()"></textarea>
-        <div class="word-count" id="word-count-type"></div>
-      </div>
-      <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">✏️ Type instead</button>
       <button class="save-btn" id="save-btn" onclick="saveEntry()" disabled>💾 Save to my diary</button>
       <button class="delete-btn" id="delete-btn" onclick="discardEntry()">🗑 Delete note</button>
       <button class="append-btn" id="append-btn" onclick="appendToLast()">➕ Add to last entry</button>
@@ -1089,7 +1089,8 @@ function toggleMode(){
   document.getElementById('mic-ring').style.display=typingMode?'none':'flex';
   document.getElementById('rec-status').style.display=typingMode?'none':'block';
   document.getElementById('rec-timer').style.display=typingMode?'none':'block';
-  transcript='';document.getElementById('save-btn').disabled=true;document.getElementById('delete-btn').style.display='none';
+  transcript='';document.getElementById('delete-btn').style.display='none';
+  updateSaveAvailability();
   document.getElementById('edit-inline-btn').style.display='none';
   if(typingMode){document.getElementById('manual-input').value='';setTimeout(function(){document.getElementById('manual-input').focus();},100);}
   else{document.getElementById('live-text').textContent='';document.getElementById('placeholder').style.display='inline';}
@@ -1098,7 +1099,7 @@ function toggleMode(){
 function onManualType(){
   var t=document.getElementById('manual-input').value.trim();
   transcript=t;
-  document.getElementById('save-btn').disabled=t.length===0;
+  document.getElementById('save-btn').disabled=(t.length===0 && !hasPendingPhotos());
   document.getElementById('delete-btn').style.display=t.length>0?'block':'none';
   updateWordCount(t,'word-count-type');
 }
@@ -1141,7 +1142,8 @@ function discardEntry(){
 }
 
 async function saveEntry(){
-  var t=transcript.trim(); if(!t) return;
+  var t=transcript.trim();
+  if(!t && !hasPendingPhotos()) return;
   var now=new Date();
   var tempId=Date.now();
   var photoUrls=await uploadPhotos(tempId);
@@ -1487,12 +1489,23 @@ function handlePhotoSelect(input){
     grid.appendChild(div);
   });
   input.value='';
+  updateSaveAvailability();
 }
 
 function removePhoto(idx){
   pendingPhotos[idx]=null;
   var el=document.getElementById('photo-thumb-'+idx);
   if(el) el.remove();
+  updateSaveAvailability();
+}
+
+function hasPendingPhotos(){
+  return pendingPhotos.some(function(p){return p!==null && p!==undefined;});
+}
+
+function updateSaveAvailability(){
+  var t=transcript.trim();
+  document.getElementById('save-btn').disabled = (t.length===0 && !hasPendingPhotos());
 }
 
 async function uploadPhotos(entryId){
