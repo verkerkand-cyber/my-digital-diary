@@ -418,6 +418,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
   <div class="nav">
     <button class="nb active" onclick="showPage('record',this)"><span>🎙️</span>Record</button>
+    <button class="nb" onclick="showFreeVersion(this)"><span>🎁</span>Free</button>
     <button class="nb" onclick="showPage('diary',this)"><span>📖</span>Diary</button>
     <button class="nb" onclick="showPage('export',this)"><span>📤</span>Export</button>
     <button class="nb" onclick="showPage('settings',this)"><span>⚙️</span>Settings</button>
@@ -426,6 +427,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <!-- RECORD PAGE -->
   <div id="page-record" class="page active">
     <div id="safety-banner" style="display:none;"></div>
+    <div id="free-version-banner" style="display:none;background:linear-gradient(135deg,#534AB7,#7B72D8);color:#fff;border-radius:14px;padding:14px 16px;margin:12px 0 0;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">🎁 You're using the Free Version</div>
+      <div style="font-size:13px;opacity:0.9;">Unlimited voice & typed diary entries, completely free — no photos in this mode. Want photos too? Check Export for upgrade options.</div>
+    </div>
     <div style="padding:12px 0 0;">
       <div class="streak-bar" id="streak-bar" style="margin:0 0 0 0;display:none;">
         <div class="streak-flame">🔥</div>
@@ -839,7 +844,7 @@ async function showApp(){
 
   var now=new Date();
   document.getElementById('topbar-date').textContent=now.toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  var dj=document.getElementById('diary-date-jump'); if(dj) dj.max=now.toISOString().split('T')[0];
+  var dj=document.getElementById('diary-date-jump'); if(dj) dj.max=localDateStr(now);
 
   // Safety banner
   var dismissed=localStorage.getItem('mdd_safety_dismissed');
@@ -1127,7 +1132,7 @@ function onManualType(){
 
 function checkAppendAvailable(){
   var entries=getCached();
-  var today=new Date().toISOString().split('T')[0];
+  var today=localDateStr(new Date());
   var hasToday=entries.some(function(e){return e.date===today;});
   document.getElementById('append-btn').style.display=hasToday?'block':'none';
 }
@@ -1135,7 +1140,7 @@ function checkAppendAvailable(){
 async function appendToLast(){
   var t=transcript.trim(); if(!t){showToast('Nothing to append');return;}
   var entries=getCached();
-  var today=new Date().toISOString().split('T')[0];
+  var today=localDateStr(new Date());
   var last=entries.find(function(e){return e.date===today;});
   if(!last){showToast('No entry today to append to');return;}
   last.text=last.text+' '+t;
@@ -1176,7 +1181,7 @@ async function saveEntry(){
   //    never be blocked, delayed, or lost because of a photo upload/queue decision.
   var entry={
     id:tempId,
-    date:now.toISOString().split('T')[0],
+    date:localDateStr(now),
     dayName:now.toLocaleDateString('en-ZA',{weekday:'long'}),
     time:now.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}),
     topic:document.getElementById('topic-field').value.trim(),
@@ -1271,8 +1276,8 @@ function updateStreak(){
   var dates=[...new Set(entries.map(function(e){return e.date;}))].sort(function(a,b){return b.localeCompare(a);});
   if(!dates.length){document.getElementById('streak-bar').style.display='none';return;}
   var streak=1,today=new Date();
-  var todayStr=today.toISOString().split('T')[0];
-  if(dates[0]!==todayStr){var yest=new Date(today);yest.setDate(yest.getDate()-1);if(dates[0]!==yest.toISOString().split('T')[0]){document.getElementById('streak-bar').style.display='none';return;}}
+  var todayLocal=localDateStr(today);
+  if(dates[0]!==todayLocal){var yest=new Date(today);yest.setDate(yest.getDate()-1);if(dates[0]!==localDateStr(yest)){document.getElementById('streak-bar').style.display='none';return;}}
   for(var i=1;i<dates.length;i++){
     var d1=new Date(dates[i-1]),d2=new Date(dates[i]);
     d1.setHours(12);d2.setHours(12);
@@ -1317,6 +1322,25 @@ function showPage(p,btn){
   if(p==='diary')renderDiary();
   if(p==='export')updateStats();
   if(p==='settings')loadVoices();
+  if(p==='record') setFreeVersionMode(false); // tapping the real Record tab always restores full (photo) mode
+}
+
+// The Free Version tab reuses the exact same Record page/elements (same IDs) rather than
+// duplicating markup — duplicate IDs in one HTML document would break getElementById lookups
+// throughout the app. Instead, this just hides the photo section and shows an explainer banner.
+function setFreeVersionMode(on){
+  var photoSection=document.getElementById('photo-section');
+  var banner=document.getElementById('free-version-banner');
+  if(photoSection) photoSection.style.display=on?'none':'';
+  if(banner) banner.style.display=on?'block':'none';
+}
+
+function showFreeVersion(btn){
+  document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active');});
+  document.querySelectorAll('.nb').forEach(function(x){x.classList.remove('active');});
+  document.getElementById('page-record').classList.add('active');
+  btn.classList.add('active');
+  setFreeVersionMode(true);
 }
 
 function renderDiary(filter){
@@ -1939,7 +1963,17 @@ var TIER_PRICES={ tier1:'$1.99/mo', tier2:'$3.99/mo', tier3:'$5.99/mo' };
 var ENTRY_DAILY_CAP=20;
 var FREE_TRIAL_DAYS=7;
 
-function todayStr(){ return new Date().toISOString().split('T')[0]; }
+function todayStr(){ return localDateStr(new Date()); }
+
+// Returns YYYY-MM-DD in the user's LOCAL timezone, not UTC. Date.toISOString() always returns
+// UTC, which caused daily resets/entry dates to roll over at UTC midnight (e.g. 2am in South
+// Africa) instead of the user's actual local midnight — this fixes that across the whole app.
+function localDateStr(d){
+  var year=d.getFullYear();
+  var month=String(d.getMonth()+1).padStart(2,'0');
+  var day=String(d.getDate()).padStart(2,'0');
+  return year+'-'+month+'-'+day;
+}
 
 async function loadUserTier(){
   if(!currentUser) return;
