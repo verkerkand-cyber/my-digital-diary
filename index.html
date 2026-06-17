@@ -360,7 +360,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
 </div>
 
-<!-- ONBOARDING SCREEN -->
+<!-- RESET PASSWORD SCREEN -->
+<div id="reset-screen" style="display:none;flex-direction:column;min-height:100dvh;background:linear-gradient(160deg,#534AB7,#7B72D8);">
+  <div class="auth-top">
+    <h1>🔑 Set a new password</h1>
+    <p>Choose a new password for your account</p>
+  </div>
+  <div class="auth-card">
+    <div class="auth-field"><label>New password (min 6 characters)</label><div style="position:relative;"><input type="password" id="reset-password" placeholder="Choose a new password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('reset-password','reset-eye')" type="button" id="reset-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
+    <div class="auth-field"><label>Confirm new password</label><input type="password" id="reset-password-confirm" placeholder="Type it again" style="width:100%;padding:13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"></div>
+    <button class="auth-submit" onclick="confirmNewPassword()">Save new password</button>
+    <div class="auth-msg" id="reset-msg"></div>
+  </div>
+</div>
 <div id="onboard-screen">
   <div class="ob-slides-wrapper"><div class="ob-slides" id="ob-slides">
     <div class="ob-slide active">
@@ -700,6 +712,13 @@ async function init(){
   }
 
   sb.auth.onAuthStateChange(function(event,session){
+    if(event==='PASSWORD_RECOVERY'){
+      document.getElementById('auth-screen').style.display='none';
+      document.getElementById('onboard-screen').style.display='none';
+      document.getElementById('app-screen').style.display='none';
+      document.getElementById('reset-screen').style.display='flex';
+      return;
+    }
     if(event==='SIGNED_IN'&&session){
       currentUser=session.user;
       var showed=localStorage.getItem('mdd_ob_done');
@@ -857,6 +876,29 @@ async function forgotPassword(){
   var {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
   if(error){msg.textContent=error.message;msg.className='auth-msg error';}
   else{msg.textContent='Password reset email sent! Check your inbox.';msg.className='auth-msg success';}
+}
+
+async function confirmNewPassword(){
+  var pass=document.getElementById('reset-password').value;
+  var confirm=document.getElementById('reset-password-confirm').value;
+  var msg=document.getElementById('reset-msg');
+  if(pass.length<6){msg.textContent='Password must be at least 6 characters.';msg.className='auth-msg error';return;}
+  if(pass!==confirm){msg.textContent='Passwords do not match. Try again.';msg.className='auth-msg error';return;}
+  msg.textContent='Saving new password…';msg.className='auth-msg';
+  var {error}=await sb.auth.updateUser({password:pass});
+  if(error){msg.textContent=error.message;msg.className='auth-msg error';return;}
+  msg.textContent='Password updated! Taking you to your diary…';msg.className='auth-msg success';
+  var {data:{session}}=await sb.auth.getSession();
+  setTimeout(function(){
+    document.getElementById('reset-screen').style.display='none';
+    if(session){
+      currentUser=session.user;
+      var showed=localStorage.getItem('mdd_ob_done');
+      if(!showed) showOnboarding(); else showApp();
+    } else {
+      document.getElementById('auth-screen').style.display='flex';
+    }
+  },1200);
 }
 
 async function signUp(){
