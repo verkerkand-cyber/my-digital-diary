@@ -8,6 +8,11 @@
 <meta name="apple-mobile-web-app-title" content="My Digital Diary">
 <title>My Digital Diary</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
+<!-- blueimp-md5: needed because browsers' native crypto APIs don't support MD5 (only SHA family),
+     but PayFast's checkout signature scheme specifically requires MD5. MIT licensed, zero
+     dependencies, the same library reasoning applies here as it did for the Edge Function's
+     server-side MD5 need. -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F4F3F8;color:#1a1a2e;display:flex;flex-direction:column;min-height:100dvh;}
@@ -1960,6 +1965,10 @@ var userTier={
 
 var TIER_LIMITS={ free:2, tier1:3, tier2:6, tier3:10 };
 var TIER_PRICES={ tier1:'$1.99/mo', tier2:'$3.99/mo', tier3:'$5.99/mo' };
+// ZAR amounts for PayFast, which only processes Rand. Rounded to clean numbers rather than
+// chasing exact USD-to-ZAR conversion to the cent, since exchange rates fluctuate daily —
+// these are independent, fixed prices, not a live currency conversion.
+var TIER_PRICES_ZAR={ tier1:32, tier2:65, tier3:97 };
 var ENTRY_DAILY_CAP=20;
 var FREE_TRIAL_DAYS=7;
 
@@ -2076,12 +2085,100 @@ function closeUpgradeModal(){
 }
 
 function selectUpgradeTier(tier){
-  // Placeholder — real PayFast/Stripe payment integration not yet built.
-  // This is where a payment provider checkout would be triggered, and the
-  // user's profiles.photo_tier would only be updated server-side after a
-  // verified successful payment (never set the tier directly from the browser).
+  if(!currentUser){ showToast('Please sign in again to upgrade'); return; }
+  var amountZar=TIER_PRICES_ZAR[tier];
+  if(!amountZar){ showToast('Unknown plan selected'); return; }
+
   closeUpgradeModal();
-  showToast('Payment not set up yet — '+tier+' selected for testing only');
+  showToast('Redirecting to PayFast…');
+
+  // Step 1: create a pending_payments row first. The Edge Function will only ever trust
+  // an amount/tier that WE recorded here ahead of time — never anything the redirect or
+  // ITN claims on its own. This row's id becomes PayFast's m_payment_id reference.
+  sb.from('pending_payments').insert({
+    user_id: currentUser.id,
+    tier: tier,
+    amount_zar: amountZar,
+    status: 'pending'
+  }).select().single().then(function(res){
+    if(res.error || !res.data){
+      console.error('Failed to create pending payment', res.error);
+      showToast('Could not start checkout — please try again');
+      return;
+    }
+    redirectToPayfast(res.data.id, tier, amountZar);
+  });
+}
+
+function redirectToPayfast(paymentId, tier, amountZar){
+  // PayFast's public sandbox test credentials — safe to use for testing, no real merchant
+  // account needed yet. These will be swapped for Andrew's real merchant_id/key once he has
+  // a South African business bank account and a live PayFast account.
+  var merchantId='10000100';
+  var merchantKey='46f0cd694581a';
+  var passphrase='jt7NOE43FZPn';
+  var payfastHost='sandbox.payfast.co.za'; // sandbox for now; becomes www.payfast.co.za for real payments
+
+  var appUrl='https://verkerkand-cyber.github.io/my-digital-diary/';
+  var notifyUrl='https://fzehrjppccsuiqtxbzeo.supabase.co/functions/v1/payfast-itn';
+
+  var nameParts=(currentUser.email||'Diary User').split('@');
+  var displayName=nameParts[0]||'Diary User';
+
+  // CRITICAL: this exact field order is REQUIRED by PayFast for the checkout signature —
+  // it is NOT alphabetical (that's only for the separate ITN/API signature format). Getting
+  // this order wrong is one of the most common causes of a PayFast signature mismatch.
+  var fields=[
+    ['merchant_id', merchantId],
+    ['merchant_key', merchantKey],
+    ['return_url', appUrl],
+    ['cancel_url', appUrl],
+    ['notify_url', notifyUrl],
+    ['name_first', displayName],
+    ['email_address', currentUser.email||''],
+    ['m_payment_id', paymentId],
+    ['amount', amountZar.toFixed(2)],
+    ['item_name', 'My Digital Diary — '+tier],
+    ['item_description', 'Photo upgrade subscription']
+  ];
+
+  // Build the signature exactly the way PayFast requires: URL-encoded values (spaces as '+'),
+  // joined with '&', passphrase appended at the end, then MD5 hashed. Skips any blank fields,
+  // since PayFast's own docs say blank/empty fields should not be included in the signature.
+  var parts=[];
+  for(var i=0;i<fields.length;i++){
+    var key=fields[i][0], val=fields[i][1];
+    if(val===''||val===null||val===undefined) continue;
+    parts.push(key+'='+encodeURIComponent(val).replace(/%20/g,'+'));
+  }
+  var paramString=parts.join('&')+'&passphrase='+encodeURIComponent(passphrase).replace(/%20/g,'+');
+  var signature=md5(paramString);
+
+  // Build and auto-submit a hidden form — the standard PayFast browser-checkout pattern.
+  // A real form POST (not a GET redirect) is used since PayFast expects this and some
+  // fields could exceed safe URL length limits.
+  var form=document.createElement('form');
+  form.method='POST';
+  form.action='https://'+payfastHost+'/eng/process';
+  form.style.display='none';
+
+  for(var i=0;i<fields.length;i++){
+    var key=fields[i][0], val=fields[i][1];
+    if(val===''||val===null||val===undefined) continue;
+    var input=document.createElement('input');
+    input.type='hidden';
+    input.name=key;
+    input.value=val;
+    form.appendChild(input);
+  }
+  var sigInput=document.createElement('input');
+  sigInput.type='hidden';
+  sigInput.name='signature';
+  sigInput.value=signature;
+  form.appendChild(sigInput);
+
+  document.body.appendChild(form);
+  form.submit();
 }
 
 function viewPhoto(url){
