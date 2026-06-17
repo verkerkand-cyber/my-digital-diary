@@ -892,15 +892,14 @@ async function syncEntries(){
   if(!currentUser||!navigator.onLine) return;
   setSyncStatus('Syncing…');
 
-  // Push any local-only entries (id is a timestamp number, cloud ids are sequential small numbers)
+  // Push any entries still marked as pending (failed or offline saves)
   var local=getCached();
-  var localOnly=local.filter(function(e){ return typeof e.id === 'number' && e.id > 1000000000000; });
-  for(var i=0;i<localOnly.length;i++){
-    var e=localOnly[i];
-    var {data:ins}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:e.date,day_name:e.dayName,time:e.time,topic:e.topic,text:e.text}).select();
-    if(ins&&ins[0]){
-      // Update local id to cloud id
-      local=local.map(function(x){ return x.id===e.id?Object.assign({},x,{id:ins[0].id}):x; });
+  var pending=local.filter(function(e){ return e.pendingSync; });
+  for(var i=0;i<pending.length;i++){
+    var e=pending[i];
+    var {data:ins,error:insErr}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:e.date,day_name:e.dayName,time:e.time,topic:e.topic,text:e.text,photos:e.photos||[]}).select();
+    if(!insErr && ins && ins[0]){
+      local=local.map(function(x){ return x.id===e.id?Object.assign({},x,{id:ins[0].id,pendingSync:false}):x; });
       setCached(local);
     }
   }
@@ -908,20 +907,36 @@ async function syncEntries(){
   // Pull latest from cloud
   var {data,error}=await sb.from('diary_entries').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:false});
   if(!error&&data){
-    var mapped=data.map(function(r){return{id:r.id,date:r.date,dayName:r.day_name,time:r.time,topic:r.topic||'',text:r.text,photos:r.photos||[]};});
-    setCached(mapped);
+    var cloudMapped=data.map(function(r){return{id:r.id,date:r.date,dayName:r.day_name,time:r.time,topic:r.topic||'',text:r.text,photos:r.photos||[]};});
+    // Keep any local entries still pending sync (not yet in cloud) so they don't disappear
+    var stillPending=getCached().filter(function(e){ return e.pendingSync; });
+    var merged=stillPending.concat(cloudMapped);
+    setCached(merged);
     setSyncStatus('✓ Synced');
     setTimeout(function(){setSyncStatus('');},2000);
+  } else if(error){
+    setSyncStatus('');
+    // Do NOT clear local cache on a failed pull — local entries stay safe
   }
 }
 
 function setSyncStatus(s){document.getElementById('sync-status').textContent=s;}
 
 async function saveToCloud(entry){
-  if(!currentUser||!navigator.onLine) return;
-  var {error}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:entry.date,day_name:entry.dayName,time:entry.time,topic:entry.topic,text:entry.text,photos:entry.photos||[]});
-  if(error) showToast('Sync error — saved locally');
-  else setSyncStatus('✓ Saved');
+  if(!currentUser){ showToast('Saved locally — sign in to sync'); return; }
+  if(!navigator.onLine){ showToast('Offline — saved locally, will sync later'); return; }
+  var {data,error}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:entry.date,day_name:entry.dayName,time:entry.time,topic:entry.topic,text:entry.text,photos:entry.photos||[]}).select();
+  if(error){
+    showToast('Sync error — saved locally, will retry');
+  } else if(data && data[0]){
+    // Replace temp id with the real cloud id so future syncs don't duplicate or lose this entry
+    var entries=getCached();
+    entries=entries.map(function(x){
+      return x.id===entry.id ? Object.assign({},x,{id:data[0].id,pendingSync:false}) : x;
+    });
+    setCached(entries);
+    setSyncStatus('✓ Saved');
+  }
 }
 
 async function deleteFromCloud(id){
@@ -1070,16 +1085,17 @@ function discardEntry(){
 async function saveEntry(){
   var t=transcript.trim(); if(!t) return;
   var now=new Date();
-  var entryId=Date.now();
-  var photoUrls=await uploadPhotos(entryId);
+  var tempId=Date.now();
+  var photoUrls=await uploadPhotos(tempId);
   var entry={
-    id:entryId,
+    id:tempId,
     date:now.toISOString().split('T')[0],
     dayName:now.toLocaleDateString('en-ZA',{weekday:'long'}),
     time:now.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}),
     topic:document.getElementById('topic-field').value.trim(),
     text:t,
-    photos:photoUrls
+    photos:photoUrls,
+    pendingSync:true
   };
   var entries=getCached(); entries.unshift(entry); setCached(entries);
   await saveToCloud(entry);
