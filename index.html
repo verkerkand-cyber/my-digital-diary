@@ -2213,6 +2213,13 @@ function redirectToPayfast(paymentId, tier, amountZar){
   sigInput.value=signature;
   form.appendChild(sigInput);
 
+  // TEMPORARY DEBUG LOGGING — helps diagnose the persistent 400 error by showing exactly
+  // what's being sent. Safe to leave in during testing; remove once checkout works reliably.
+  console.log('=== PayFast Debug Info ===');
+  console.log('Param string used for signature:', paramString);
+  console.log('Computed signature:', signature);
+  console.log('Fields being submitted:', fields);
+
   document.body.appendChild(form);
   form.submit();
 }
