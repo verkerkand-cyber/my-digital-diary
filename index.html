@@ -2142,12 +2142,17 @@ function selectUpgradeTier(tier){
 }
 
 function redirectToPayfast(paymentId, tier, amountZar){
-  // PayFast's public sandbox test credentials — safe to use for testing, no real merchant
-  // account needed yet. These will be swapped for Andrew's real merchant_id/key once he has
-  // a South African business bank account and a live PayFast account.
-  var merchantId='10000100';
-  var merchantKey='46f0cd694581a';
-  var passphrase='jt7NOE43FZPn';
+  // Andrew's OWN PayFast Sandbox account credentials (created automatically when he first
+  // logged into sandbox.payfast.co.za). NOT the generic 10000100 example credentials shown
+  // in PayFast's public documentation — those are just a shared illustration used in docs,
+  // not a real account anyone can actually log into and check. Using the generic ones meant
+  // test payments processed fine (sandbox accepts any merchant_id format-wise) but nothing
+  // ever showed up in Andrew's own dashboard or ITN history, since they belonged to no one.
+  // These will be swapped again for Andrew's real LIVE merchant_id/key once he has a South
+  // African business bank account and a live (non-sandbox) PayFast account.
+  var merchantId='10050460';
+  var merchantKey='kc6xr3hdsrwx6';
+  var passphrase='Yvonne010101';
   var payfastHost='sandbox.payfast.co.za'; // sandbox for now; becomes www.payfast.co.za for real payments
 
   var appUrl='https://verkerkand-cyber.github.io/my-digital-diary/';
