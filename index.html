@@ -371,13 +371,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <!-- RESET PASSWORD SCREEN -->
 <div id="reset-screen" style="display:none;flex-direction:column;min-height:100dvh;background:linear-gradient(160deg,#534AB7,#7B72D8);">
   <div class="auth-top">
-    <h1>🔑 Set a new password</h1>
-    <p>Choose a new password for your account</p>
+    <h1 id="reset-title">🔑 Set a new password</h1>
+    <p id="reset-subtitle">Choose a new password for your account</p>
   </div>
   <div class="auth-card">
-    <div class="auth-field"><label>New password (min 6 characters)</label><div style="position:relative;"><input type="password" id="reset-password" placeholder="Choose a new password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('reset-password','reset-eye')" type="button" id="reset-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
-    <div class="auth-field"><label>Confirm new password</label><input type="password" id="reset-password-confirm" placeholder="Type it again" style="width:100%;padding:13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"></div>
-    <button class="auth-submit" onclick="confirmNewPassword()">Save new password</button>
+    <div id="reset-form-fields">
+      <div class="auth-field"><label>New password (min 6 characters)</label><div style="position:relative;"><input type="password" id="reset-password" placeholder="Choose a new password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('reset-password','reset-eye')" type="button" id="reset-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
+      <div class="auth-field"><label>Confirm new password</label><input type="password" id="reset-password-confirm" placeholder="Type it again" style="width:100%;padding:13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"></div>
+      <button class="auth-submit" onclick="confirmNewPassword()">Save new password</button>
+    </div>
+    <div id="reset-expired-fields" style="display:none;">
+      <div class="auth-field"><label>Email address</label><input type="email" id="reset-expired-email" placeholder="you@example.com" style="width:100%;padding:13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"></div>
+      <button class="auth-submit" onclick="resendResetLink()">Send me a new link</button>
+    </div>
     <div class="auth-msg" id="reset-msg"></div>
   </div>
 </div>
@@ -720,7 +726,22 @@ async function init(){
   // Check directly if this page load is a password recovery link BEFORE anything else,
   // since Supabase can fire the PASSWORD_RECOVERY event before any listener is attached.
   var urlHasRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
-  if(urlHasRecovery){
+  // An EXPIRED or already-used recovery link doesn't arrive as type=recovery at all —
+  // Supabase instead redirects with error=access_denied / error_code=otp_expired in the
+  // URL hash. Without checking for this separately, an expired link would previously fall
+  // through to the normal sign-in screen with no explanation, or show a broken password
+  // form that fails confusingly on submit.
+  var urlHasExpiredRecovery = (window.location.hash.includes('error=') || window.location.search.includes('error=')) &&
+    (window.location.hash.includes('otp_expired') || window.location.hash.includes('access_denied') ||
+     window.location.search.includes('otp_expired') || window.location.search.includes('access_denied'));
+  if(urlHasExpiredRecovery){
+    document.getElementById('pin-screen').style.display='none';
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('onboard-screen').style.display='none';
+    document.getElementById('app-screen').style.display='none';
+    document.getElementById('reset-screen').style.display='flex';
+    showExpiredResetLinkUI();
+  } else if(urlHasRecovery){
     document.getElementById('pin-screen').style.display='none';
     document.getElementById('auth-screen').style.display='none';
     document.getElementById('onboard-screen').style.display='none';
@@ -751,7 +772,7 @@ async function init(){
     }
   });
 
-  if(urlHasRecovery) return; // reset-screen is already showing, skip the normal session check below
+  if(urlHasRecovery || urlHasExpiredRecovery) return; // reset-screen is already showing, skip the normal session check below
 
   // Check PIN
   var pin=localStorage.getItem('mdd_pin');
@@ -930,6 +951,29 @@ async function forgotPassword(){
   else{msg.textContent='Password reset email sent! Check your inbox.';msg.className='auth-msg success';}
 }
 
+function showExpiredResetLinkUI(){
+  // Friendly explanation instead of a broken password form or a raw Supabase error —
+  // also gives a direct, one-tap way to request a new link without navigating away first.
+  document.getElementById('reset-title').textContent='⏰ This link has expired';
+  document.getElementById('reset-subtitle').textContent='Password reset links only work for a little while, for your security. No problem — just request a new one below.';
+  document.getElementById('reset-form-fields').style.display='none';
+  document.getElementById('reset-expired-fields').style.display='block';
+}
+
+async function resendResetLink(){
+  var email=document.getElementById('reset-expired-email').value.trim();
+  var msg=document.getElementById('reset-msg');
+  if(!email){msg.textContent='Enter your email address above first.';msg.className='auth-msg error';return;}
+  msg.textContent='Sending a new link…';msg.className='auth-msg';
+  // Explicitly use the clean app URL, NOT window.location.href — at this point the
+  // current URL still contains the broken #error=... fragment from the expired link,
+  // and baking that into the new email's redirect would just recreate the same problem.
+  var cleanAppUrl='https://verkerkand-cyber.github.io/my-digital-diary/';
+  var {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:cleanAppUrl});
+  if(error){msg.textContent=error.message;msg.className='auth-msg error';}
+  else{msg.textContent='New reset link sent! Check your inbox.';msg.className='auth-msg success';}
+}
+
 async function confirmNewPassword(){
   var pass=document.getElementById('reset-password').value;
   var confirm=document.getElementById('reset-password-confirm').value;
@@ -938,7 +982,20 @@ async function confirmNewPassword(){
   if(pass!==confirm){msg.textContent='Passwords do not match. Try again.';msg.className='auth-msg error';return;}
   msg.textContent='Saving new password…';msg.className='auth-msg';
   var {error}=await sb.auth.updateUser({password:pass});
-  if(error){msg.textContent=error.message;msg.className='auth-msg error';return;}
+  if(error){
+    // A link that looked valid when the page loaded can still expire in the time it takes
+    // someone to type a new password — switch to the same friendly expired-link UI rather
+    // than leaving them stuck on a password form that will never successfully submit.
+    var msgLower=(error.message||'').toLowerCase();
+    if(msgLower.includes('expired')||msgLower.includes('invalid')||msgLower.includes('token')){
+      showExpiredResetLinkUI();
+      msg.textContent='';
+    } else {
+      msg.textContent='Something went wrong saving your password. Please try again.';
+      msg.className='auth-msg error';
+    }
+    return;
+  }
   msg.textContent='Password updated! Taking you to your diary…';msg.className='auth-msg success';
   var {data:{session}}=await sb.auth.getSession();
   setTimeout(function(){
