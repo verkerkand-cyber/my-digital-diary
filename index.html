@@ -1079,11 +1079,12 @@ async function syncEntries(){
 function setSyncStatus(s){document.getElementById('sync-status').textContent=s;}
 
 async function saveToCloud(entry){
-  if(!currentUser){ showToast('Saved locally — sign in to sync'); return; }
-  if(!navigator.onLine){ showToast('Offline — saved locally, will sync later'); return; }
+  if(!currentUser){ showToast('Saved locally — sign in to sync'); return null; }
+  if(!navigator.onLine){ showToast('Offline — saved locally, will sync later'); return null; }
   var {data,error}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:entry.date,day_name:entry.dayName,time:entry.time,topic:entry.topic,text:entry.text,photos:entry.photos||[]}).select();
   if(error){
     showToast('Sync error — saved locally, will retry');
+    return null;
   } else if(data && data[0]){
     // Replace temp id with the real cloud id so future syncs don't duplicate or lose this entry
     var entries=getCached();
@@ -1092,7 +1093,9 @@ async function saveToCloud(entry){
     });
     setCached(entries);
     setSyncStatus('✓ Saved');
+    return data[0].id;
   }
+  return null;
 }
 
 async function deleteFromCloud(id){
@@ -1262,7 +1265,7 @@ async function saveEntry(){
     pendingSync:true
   };
   var entries=getCached(); entries.unshift(entry); setCached(entries);
-  await saveToCloud(entry);
+  var realId=await saveToCloud(entry);
   await incrementEntryCount();
   clearPhotos();
   document.getElementById('save-btn').disabled=true;
@@ -1285,7 +1288,7 @@ async function saveEntry(){
   //    old risk of losing the entry text itself, which is not recoverable.
   if(photosToProcess.length>0){
     try{
-      await handlePhotosAfterEntrySaved(tempId,photosToProcess);
+      await handlePhotosAfterEntrySaved(realId||tempId,photosToProcess);
     }catch(e){
       showToast('Entry saved, but there was an issue with the photo — you can try adding it again via Edit');
     }
