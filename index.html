@@ -9,6 +9,7 @@
 <title>My Digital Diary</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" defer></script>
 <!-- blueimp-md5: needed because browsers' native crypto APIs don't support MD5 (only SHA family),
      but PayFast's checkout signature scheme specifically requires MD5. MIT licensed, zero
      dependencies, the same library reasoning applies here as it did for the Edge Function's
@@ -354,6 +355,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <div class="auth-field"><label>Email address</label><input type="email" id="login-email" placeholder="your@email.com"></div>
       <div class="auth-field"><label>Password</label><div style="position:relative;"><input type="password" id="login-password" placeholder="Your password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('login-password','login-eye')" type="button" id="login-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
       <button class="auth-submit" onclick="signIn()">Sign in</button>
+      <div id="turnstile-login" style="margin-top:12px;display:flex;justify-content:center;"></div>
       <div class="auth-msg" id="login-msg"></div>
       <div style="text-align:center;margin-top:14px;">
         <button onclick="forgotPassword()" style="background:none;border:none;color:#534AB7;font-size:13px;cursor:pointer;text-decoration:underline;">Forgot my password</button>
@@ -363,6 +365,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <div class="auth-field"><label>Email address</label><input type="email" id="signup-email" placeholder="your@email.com"></div>
       <div class="auth-field"><label>Password (min 6 characters)</label><div style="position:relative;"><input type="password" id="signup-password" placeholder="Choose a password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('signup-password','signup-eye')" type="button" id="signup-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
       <button class="auth-submit" onclick="signUp()">Create account</button>
+      <div id="turnstile-signup" style="margin-top:12px;display:flex;justify-content:center;"></div>
       <div class="auth-msg" id="signup-msg"></div>
     </div>
   </div>
@@ -383,6 +386,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div id="reset-expired-fields" style="display:none;">
       <div class="auth-field"><label>Email address</label><input type="email" id="reset-expired-email" placeholder="you@example.com" style="width:100%;padding:13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"></div>
       <button class="auth-submit" onclick="resendResetLink()">Send me a new link</button>
+      <div id="turnstile-reset" style="margin-top:12px;display:flex;justify-content:center;"></div>
     </div>
     <div class="auth-msg" id="reset-msg"></div>
   </div>
@@ -698,6 +702,34 @@ const SUPA_URL='https://fzehrjppccsuiqtxbzeo.supabase.co';
 const SUPA_KEY='sb_publishable_qZY6YQvqaqGD9-GxMQSogw_CMFST2OB';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 
+// ── CAPTCHA (Cloudflare Turnstile) ──
+// Required because Supabase's "Enable Captcha protection" setting now expects a
+// captchaToken on signIn/signUp/resetPasswordForEmail calls — without this, those
+// calls will be rejected by Supabase once Captcha protection is turned on.
+const TURNSTILE_SITE_KEY='0x4AAAAAADpJFGacO7ZS6jRV';
+var turnstileLoginWidgetId=null, turnstileSignupWidgetId=null, turnstileResetWidgetId=null;
+
+function renderTurnstileWidgets(){
+  if(typeof turnstile==='undefined') return; // script may not have finished loading yet
+  if(turnstileLoginWidgetId===null && document.getElementById('turnstile-login')){
+    turnstileLoginWidgetId=turnstile.render('#turnstile-login',{sitekey:TURNSTILE_SITE_KEY});
+  }
+  if(turnstileSignupWidgetId===null && document.getElementById('turnstile-signup')){
+    turnstileSignupWidgetId=turnstile.render('#turnstile-signup',{sitekey:TURNSTILE_SITE_KEY});
+  }
+  if(turnstileResetWidgetId===null && document.getElementById('turnstile-reset')){
+    turnstileResetWidgetId=turnstile.render('#turnstile-reset',{sitekey:TURNSTILE_SITE_KEY});
+  }
+}
+
+function getTurnstileToken(widgetId){
+  try{ return turnstile.getResponse(widgetId)||''; }catch(e){ return ''; }
+}
+
+function resetTurnstile(widgetId){
+  try{ turnstile.reset(widgetId); }catch(e){}
+}
+
 // ── STATE ──
 var currentUser=null, isRec=false, recognition=null, timerInt=null, secs=0, transcript='';
 var typingMode=false, editMode='', editEntryId=null;
@@ -718,6 +750,8 @@ async function init(){
   updateOnlineStatus();
   window.addEventListener('online',updateOnlineStatus);
   window.addEventListener('offline',updateOnlineStatus);
+  renderTurnstileWidgets();
+  setTimeout(renderTurnstileWidgets,800); // retry in case the deferred Turnstile script hadn't loaded yet
 
   // iOS check
   var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -923,8 +957,11 @@ async function signIn(){
   var email=document.getElementById('login-email').value.trim();
   var pass=document.getElementById('login-password').value;
   var msg=document.getElementById('login-msg');
+  var captchaToken=getTurnstileToken(turnstileLoginWidgetId);
+  if(!captchaToken){msg.textContent='Please complete the verification check above.';msg.className='auth-msg error';return;}
   msg.textContent='Signing in…'; msg.className='auth-msg';
-  var {error}=await sb.auth.signInWithPassword({email,password:pass});
+  var {error}=await sb.auth.signInWithPassword({email,password:pass,options:{captchaToken}});
+  resetTurnstile(turnstileLoginWidgetId);
   if(error){msg.textContent=error.message;msg.className='auth-msg error';}
   else{msg.textContent='';} 
 }
@@ -945,8 +982,11 @@ async function forgotPassword(){
   var email=document.getElementById('login-email').value.trim();
   var msg=document.getElementById('login-msg');
   if(!email){msg.textContent='Enter your email address above first.';msg.className='auth-msg error';return;}
+  var captchaToken=getTurnstileToken(turnstileLoginWidgetId);
+  if(!captchaToken){msg.textContent='Please complete the verification check above.';msg.className='auth-msg error';return;}
   msg.textContent='Sending reset email…';msg.className='auth-msg';
-  var {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
+  var {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href,captchaToken});
+  resetTurnstile(turnstileLoginWidgetId);
   if(error){msg.textContent=error.message;msg.className='auth-msg error';}
   else{msg.textContent='Password reset email sent! Check your inbox.';msg.className='auth-msg success';}
 }
@@ -958,18 +998,22 @@ function showExpiredResetLinkUI(){
   document.getElementById('reset-subtitle').textContent='Password reset links only work for a little while, for your security. No problem — just request a new one below.';
   document.getElementById('reset-form-fields').style.display='none';
   document.getElementById('reset-expired-fields').style.display='block';
+  renderTurnstileWidgets();
 }
 
 async function resendResetLink(){
   var email=document.getElementById('reset-expired-email').value.trim();
   var msg=document.getElementById('reset-msg');
   if(!email){msg.textContent='Enter your email address above first.';msg.className='auth-msg error';return;}
+  var captchaToken=getTurnstileToken(turnstileResetWidgetId);
+  if(!captchaToken){msg.textContent='Please complete the verification check above.';msg.className='auth-msg error';return;}
   msg.textContent='Sending a new link…';msg.className='auth-msg';
   // Explicitly use the clean app URL, NOT window.location.href — at this point the
   // current URL still contains the broken #error=... fragment from the expired link,
   // and baking that into the new email's redirect would just recreate the same problem.
   var cleanAppUrl='https://verkerkand-cyber.github.io/my-digital-diary/';
-  var {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:cleanAppUrl});
+  var {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:cleanAppUrl,captchaToken});
+  resetTurnstile(turnstileResetWidgetId);
   if(error){msg.textContent=error.message;msg.className='auth-msg error';}
   else{msg.textContent='New reset link sent! Check your inbox.';msg.className='auth-msg success';}
 }
@@ -1016,20 +1060,26 @@ async function signUp(){
   var msg=document.getElementById('signup-msg');
   if(!email){msg.textContent='Please enter your email.';msg.className='auth-msg error';return;}
   if(pass.length<6){msg.textContent='Password must be at least 6 characters.';msg.className='auth-msg error';return;}
+  var captchaToken=getTurnstileToken(turnstileSignupWidgetId);
+  if(!captchaToken){msg.textContent='Please complete the verification check above.';msg.className='auth-msg error';return;}
   msg.textContent='Creating account…'; msg.className='auth-msg';
   // Explicitly set the redirect URL rather than relying on Supabase's dashboard-configured
   // Site URL as a fallback (passing null) — a real user got a confirmation link that landed
   // on the bare github.io domain instead of the actual /my-digital-diary/ app path, which
   // 404'd. Being explicit here removes any dependency on that dashboard setting working
   // exactly as expected.
-  var {data,error}=await sb.auth.signUp({email,password:pass,options:{emailRedirectTo:'https://verkerkand-cyber.github.io/my-digital-diary/'}});
+  var {data,error}=await sb.auth.signUp({email,password:pass,options:{captchaToken,emailRedirectTo:'https://verkerkand-cyber.github.io/my-digital-diary/'}});
+  resetTurnstile(turnstileSignupWidgetId);
   if(error){msg.textContent=error.message;msg.className='auth-msg error';}
   else if(data&&data.user&&data.user.identities&&data.user.identities.length===0){
     msg.textContent='An account with this email already exists. Please sign in.';msg.className='auth-msg error';
   } else {
     // Auto sign in after signup
     msg.textContent='Account created! Signing you in…';msg.className='auth-msg success';
-    var {error:signinErr}=await sb.auth.signInWithPassword({email,password:pass});
+    var loginCaptchaToken=getTurnstileToken(turnstileLoginWidgetId)||captchaToken;
+    var {error:signinErr}=await sb.auth.signInWithPassword({email,password:pass,options:{captchaToken:loginCaptchaToken}});
+    resetTurnstile(turnstileLoginWidgetId);
+    resetTurnstile(turnstileSignupWidgetId);
     if(signinErr){msg.textContent='Account created! Please sign in.';msg.className='auth-msg success';}
   }
 }
