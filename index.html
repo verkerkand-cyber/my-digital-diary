@@ -962,7 +962,15 @@ async function signIn(){
   msg.textContent='Signing in…'; msg.className='auth-msg';
   var {error}=await sb.auth.signInWithPassword({email,password:pass,options:{captchaToken}});
   resetTurnstile(turnstileLoginWidgetId);
-  if(error){msg.textContent=error.message;msg.className='auth-msg error';}
+  if(error){
+    var errLower=(error.message||'').toLowerCase();
+    if(errLower.includes('email not confirmed')||errLower.includes('email_not_confirmed')){
+      msg.textContent='Please check your email and click the confirmation link before signing in. (Check your spam folder if you don\'t see it.)';
+    } else {
+      msg.textContent=error.message;
+    }
+    msg.className='auth-msg error';
+  }
   else{msg.textContent='';} 
 }
 
@@ -1080,7 +1088,7 @@ async function signUp(){
     var {error:signinErr}=await sb.auth.signInWithPassword({email,password:pass,options:{captchaToken:loginCaptchaToken}});
     resetTurnstile(turnstileLoginWidgetId);
     resetTurnstile(turnstileSignupWidgetId);
-    if(signinErr){msg.textContent='Account created! Please sign in.';msg.className='auth-msg success';}
+    if(signinErr){msg.textContent='Account created! Please check your email and click the confirmation link before signing in.';msg.className='auth-msg success';}
   }
 }
 
