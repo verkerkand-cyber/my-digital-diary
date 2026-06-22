@@ -1,0 +1,2330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="My Digital Diary">
+<title>My Digital Diary</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
+<!-- blueimp-md5: needed because browsers' native crypto APIs don't support MD5 (only SHA family),
+     but PayFast's checkout signature scheme specifically requires MD5. MIT licensed, zero
+     dependencies, the same library reasoning applies here as it did for the Edge Function's
+     server-side MD5 need. -->
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#F4F3F8;color:#1a1a2e;display:flex;flex-direction:column;min-height:100dvh;}
+
+/* AUTH SCREEN */
+#auth-screen{display:flex;flex-direction:column;min-height:100dvh;background:linear-gradient(160deg,#534AB7,#7B72D8);}
+.auth-top{padding:60px 24px 30px;text-align:center;}
+.auth-top h1{font-size:28px;font-weight:700;color:white;margin-bottom:8px;}
+.auth-top p{font-size:15px;color:rgba(255,255,255,0.8);}
+.auth-card{background:white;border-radius:28px 28px 0 0;flex:1;padding:28px 24px 40px;}
+.auth-tabs{display:flex;background:#F4F3F8;border-radius:14px;padding:4px;margin-bottom:24px;}
+.auth-tab{flex:1;padding:10px;text-align:center;font-size:14px;font-weight:600;cursor:pointer;border-radius:10px;color:#888;border:none;background:none;}
+.auth-tab.active{background:white;color:#534AB7;box-shadow:0 1px 6px rgba(0,0,0,0.1);}
+.auth-field{margin-bottom:14px;}
+.auth-field label{font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:5px;}
+.auth-field input{width:100%;padding:13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;}
+.auth-field input:focus{border-color:#534AB7;}
+.auth-submit{width:100%;padding:15px;background:#534AB7;color:white;border:none;border-radius:14px;font-size:16px;font-weight:600;cursor:pointer;margin-top:6px;}
+.auth-submit:active{background:#3d368f;}
+.auth-msg{font-size:13px;text-align:center;margin-top:12px;min-height:20px;}
+.auth-msg.error{color:#DC2626;}
+.auth-msg.success{color:#16A34A;}
+.auth-divider{text-align:center;font-size:12px;color:#aaa;margin:16px 0;}
+
+/* ONBOARDING */
+#onboard-screen{display:none;flex-direction:column;min-height:100dvh;background:white;}
+.ob-slides-wrapper{flex:1;overflow-y:auto;}
+.ob-slides{display:block;}
+.ob-slide{display:none;padding:40px 32px 20px;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+.ob-slide.active{display:flex;}
+.ob-icon{font-size:64px;margin-bottom:24px;}
+.ob-title{font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:12px;}
+.ob-text{font-size:15px;color:#666;line-height:1.7;max-width:280px;}
+.ob-dots{display:flex;justify-content:center;gap:8px;padding:20px 0;}
+.ob-dot{width:8px;height:8px;border-radius:50%;background:#E0DDFF;cursor:pointer;}
+.ob-dot.active{background:#534AB7;width:24px;}
+.ob-next{margin:0 24px 40px;padding:15px;background:#534AB7;color:white;border:none;border-radius:14px;font-size:16px;font-weight:600;cursor:pointer;}
+.ob-skip{text-align:center;padding-bottom:16px;font-size:13px;color:#aaa;cursor:pointer;}
+
+/* MAIN APP */
+#app-screen{display:none;flex-direction:column;min-height:100dvh;}
+.topbar{background:#534AB7;padding:14px 16px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.topbar h1{font-size:18px;font-weight:600;color:white;}
+.topbar p{font-size:12px;color:rgba(255,255,255,0.75);margin-top:2px;}
+.topbar-right{display:flex;align-items:center;gap:8px;}
+.user-btn{width:34px;height:34px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;border:none;}
+.nav{display:flex;background:white;border-bottom:1px solid #E8E6F0;flex-shrink:0;}
+.nb{flex:1;padding:8px 2px 6px;text-align:center;font-size:10px;color:#888;border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;font-weight:500;}
+.nb span{font-size:17px;display:block;margin-bottom:2px;}
+.nb.active{color:#534AB7;border-bottom:3px solid #534AB7;}
+.page{display:none;flex:1;flex-direction:column;}
+.page.active{display:flex;}
+
+/* OFFLINE BANNER */
+.offline-banner{background:#DC2626;color:white;text-align:center;padding:8px;font-size:12px;font-weight:500;display:none;}
+.offline-banner.show{display:block;}
+
+/* DATA SAFETY BANNER */
+.safety-banner{background:#FAEEDA;border:1px solid #EF9F27;border-radius:12px;padding:12px 14px;margin:12px 16px 0;display:flex;gap:10px;align-items:flex-start;}
+.safety-banner p{font-size:12px;color:#633806;line-height:1.5;}
+.safety-close{background:none;border:none;font-size:18px;color:#633806;cursor:pointer;flex-shrink:0;padding:0;}
+
+/* RECORD PAGE */
+#page-record{padding:16px;overflow-y:auto;background:#F4F3F8;}
+.search-bar{display:flex;align-items:center;gap:8px;background:white;border-radius:12px;padding:10px 14px;margin-bottom:12px;border:1.5px solid #E0DDFF;}
+.search-bar input{flex:1;border:none;outline:none;font-size:14px;color:#1a1a2e;font-family:inherit;background:transparent;}
+.search-bar input::placeholder{color:#bbb;}
+.rec-card{background:white;border-radius:20px;padding:20px 16px;text-align:center;box-shadow:0 2px 16px rgba(83,74,183,0.08);margin-bottom:14px;}
+.topic-input{width:100%;background:#F9F8FF;border:1.5px solid #E0DDFF;border-radius:12px;padding:10px 14px;font-size:14px;color:#1a1a2e;font-family:inherit;outline:none;margin-bottom:14px;}
+.topic-input::placeholder{color:#bbb;}
+.mic-ring{width:60px;height:60px;border-radius:50%;background:#EEEDFE;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;transition:all 0.2s;}
+.mic-ring.rec{background:#FEE2E2;animation:pulse 1.2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,0.2)}60%{box-shadow:0 0 0 16px rgba(220,38,38,0)}}
+.mic-btn{width:46px;height:46px;border-radius:50%;background:#534AB7;border:none;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:transform 0.1s,background 0.2s;user-select:none;}
+.mic-btn:active{transform:scale(0.93);}
+.mic-btn.rec{background:#DC2626;}
+.rec-status{font-size:13px;color:#666;margin-bottom:4px;min-height:18px;}
+.rec-timer{font-size:30px;font-weight:300;color:#534AB7;letter-spacing:3px;margin-bottom:14px;}
+.rec-timer.rec{color:#DC2626;}
+.transcript-box{width:100%;background:#F9F8FF;border:1.5px solid #E0DDFF;border-radius:12px;padding:12px;min-height:100px;max-height:180px;overflow-y:auto;font-size:14px;color:#1a1a2e;line-height:1.65;text-align:left;margin-bottom:6px;font-family:inherit;}
+.word-count{font-size:11px;color:#aaa;text-align:right;margin-bottom:8px;}
+.edit-inline-btn{background:none;border:1px solid #E0DDFF;color:#534AB7;font-size:12px;font-weight:500;cursor:pointer;padding:5px 14px;border-radius:20px;margin:0 auto 10px;display:none;}
+.mode-toggle{background:none;border:none;color:#534AB7;font-size:13px;font-weight:600;cursor:pointer;margin:0 auto 12px;display:block;text-decoration:underline;}
+.manual-input{width:100%;background:#F9F8FF;border:1.5px solid #E0DDFF;border-radius:12px;padding:12px;min-height:100px;max-height:180px;font-size:14px;color:#1a1a2e;line-height:1.65;font-family:inherit;outline:none;resize:none;margin-bottom:6px;}
+.save-btn{width:100%;padding:14px;background:#534AB7;color:white;border:none;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background 0.2s;}
+.save-btn:disabled{background:#D1CFF0;color:#9990D8;}
+.save-btn.saved{background:#16A34A;}
+.delete-btn{width:100%;padding:12px;background:white;color:#DC2626;border:1.5px solid #FECACA;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;display:none;margin-bottom:8px;}
+.append-btn{width:100%;padding:12px;background:white;color:#534AB7;border:1.5px solid #E0DDFF;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;display:none;}
+.photo-section{margin-bottom:10px;}
+.photo-btn{width:100%;padding:11px;background:white;color:#534AB7;border:1.5px solid #E0DDFF;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;}
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;}
+.photo-thumb{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#F0EFF8;}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;}
+.photo-remove{position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.5);color:white;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.photo-uploading{position:absolute;inset:0;background:rgba(83,74,183,0.5);display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:600;}
+.entry-photos{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:8px;}
+.entry-photo{aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;}
+.entry-photo img{width:100%;height:100%;object-fit:cover;}
+.entry-photo.queued{display:flex;align-items:center;justify-content:center;background:#F4F3F8;cursor:default;}
+.entry-photo.queued .queued-spinner{width:22px;height:22px;border:3px solid #D1CFF0;border-top-color:#534AB7;border-radius:50%;animation:mdd-spin 0.8s linear infinite;}
+@keyframes mdd-spin{to{transform:rotate(360deg);}}
+.photo-viewer{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:800;display:none;align-items:center;justify-content:center;flex-direction:column;}
+.photo-viewer.show{display:flex;}
+.photo-viewer img{max-width:95%;max-height:85vh;object-fit:contain;border-radius:8px;}
+.photo-viewer-close{position:absolute;top:16px;right:16px;background:none;border:none;color:white;font-size:28px;cursor:pointer;}
+.hint{font-size:12px;color:#999;text-align:center;line-height:1.6;padding:0 8px;}
+.type-area{display:none;}
+.type-area.show{display:block;}
+.mic-area.hide{display:none;}
+
+/* STREAK */
+.streak-bar{background:white;border-radius:14px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(83,74,183,0.06);}
+.streak-flame{font-size:24px;}
+.streak-info h4{font-size:14px;font-weight:600;color:#1a1a2e;}
+.streak-info p{font-size:12px;color:#888;}
+.streak-count{margin-left:auto;font-size:22px;font-weight:700;color:#534AB7;}
+
+/* DIARY PAGE */
+#page-diary{flex-direction:column;overflow:hidden;}
+.diary-nav{background:white;border-bottom:1px solid #E8E6F0;padding:8px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.diary-search{flex:1;padding:7px 12px;border:1.5px solid #E0DDFF;border-radius:20px;font-size:13px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;}
+.diary-date-jump{padding:7px 10px;border:1.5px solid #E0DDFF;border-radius:20px;font-size:13px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;}
+.view-toggle{display:flex;background:#F0EFF8;border-radius:20px;padding:3px;gap:2px;}
+.vb{padding:5px 10px;border-radius:16px;border:none;font-size:11px;font-weight:500;cursor:pointer;background:none;color:#888;}
+.vb.active{background:white;color:#534AB7;box-shadow:0 1px 4px rgba(0,0,0,0.1);}
+#diary-scroll{flex:1;overflow-y:auto;padding:12px;}
+#diary-page-view{flex:1;overflow:hidden;position:relative;display:none;}
+.page-container{display:flex;width:100%;height:100%;transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);}
+.diary-single-page{min-width:100%;height:100%;overflow-y:auto;padding:12px;flex-shrink:0;}
+.page-flip-nav{position:absolute;bottom:16px;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 16px;pointer-events:none;z-index:10;}
+.flip-arrow{width:42px;height:42px;border-radius:50%;background:white;border:none;font-size:18px;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,0.15);display:flex;align-items:center;justify-content:center;pointer-events:all;color:#534AB7;}
+.flip-arrow:disabled{opacity:0.3;}
+.page-counter{background:rgba(83,74,183,0.12);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;color:#534AB7;}
+.diary-day{background:white;border-radius:16px;margin-bottom:14px;overflow:hidden;box-shadow:0 2px 12px rgba(83,74,183,0.06);}
+.diary-day-header{background:linear-gradient(135deg,#534AB7,#7B72D8);padding:12px 16px;}
+.diary-day-name{font-size:16px;font-weight:600;color:white;}
+.diary-day-date{font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px;}
+.diary-entry{padding:12px 16px;border-bottom:1px solid #F0EFF8;}
+.diary-entry:last-child{border-bottom:none;}
+.entry-time{font-size:12px;font-weight:600;color:#534AB7;background:#EEEDFE;padding:3px 8px;border-radius:20px;display:inline-block;margin-bottom:5px;}
+.entry-topic{font-size:11px;font-weight:700;color:#534AB7;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;}
+.entry-text{font-size:14px;color:#333;line-height:1.65;}
+.entry-wc{font-size:10px;color:#aaa;margin-top:3px;}
+.entry-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.act-btn{padding:5px 12px;border-radius:20px;border:1px solid #E0DDFF;background:white;font-size:12px;font-weight:500;cursor:pointer;color:#534AB7;}
+.act-btn.danger{color:#DC2626;border-color:#FECACA;}
+.no-results{text-align:center;padding:40px 24px;color:#888;font-size:14px;}
+.empty-diary{text-align:center;padding:50px 24px;}
+.empty-diary .ei{font-size:48px;margin-bottom:14px;}
+.empty-diary h3{font-size:17px;font-weight:600;color:#333;margin-bottom:8px;}
+.empty-diary p{font-size:14px;color:#888;line-height:1.6;}
+
+/* EXPORT PAGE */
+#page-export{overflow-y:auto;background:#F4F3F8;flex-direction:column;}
+.exp-wrap{padding:16px;padding-bottom:40px;}
+.stats-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+.stat-card{background:white;border-radius:12px;padding:14px;text-align:center;box-shadow:0 2px 8px rgba(83,74,183,0.06);}
+.stat-num{font-size:26px;font-weight:600;color:#534AB7;}
+.stat-label{font-size:12px;color:#888;margin-top:2px;}
+.exp-card{background:white;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 12px rgba(83,74,183,0.06);}
+.exp-card h3{font-size:15px;font-weight:600;color:#333;margin-bottom:5px;}
+.exp-card p{font-size:13px;color:#777;line-height:1.5;margin-bottom:12px;}
+.exp-row{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;border:1px solid #E0DDFF;background:white;margin-bottom:8px;cursor:pointer;}
+.exp-row:last-child{margin-bottom:0;}
+.exp-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.exp-icon.p{background:#EEEDFE;}
+.exp-icon.r{background:#FEE2E2;}
+.exp-icon.g{background:#FAEEDA;}
+.exp-icon.b{background:#E1F5EE;}
+.exp-row-label{font-size:14px;color:#333;font-weight:500;}
+.exp-row-sub{font-size:11px;color:#999;}
+.exp-badge{margin-left:auto;background:#534AB7;color:white;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;flex-shrink:0;}
+.exp-badge.gold{background:#BA7517;}
+.cust-toggle{border-color:#534AB7!important;background:#EEEDFE!important;}
+.cust-toggle .exp-row-label{color:#534AB7!important;}
+.cust-panel{display:none;margin-top:14px;border-top:1px solid #F0EFF8;padding-top:14px;}
+.cust-panel.open{display:block;}
+.sub-tabs{display:flex;gap:6px;margin-bottom:14px;}
+.sub-tab{flex:1;padding:8px 4px;border-radius:10px;border:1.5px solid #E0DDFF;background:white;font-size:11px;font-weight:600;cursor:pointer;color:#888;text-align:center;}
+.sub-tab.active{background:#EEEDFE;color:#534AB7;border-color:#534AB7;}
+.sub-content{display:none;}
+.sub-content.active{display:block;}
+.cl{font-size:12px;font-weight:600;color:#444;margin-bottom:6px;margin-top:12px;}
+.cl:first-child{margin-top:0;}
+.ci{width:100%;background:#F9F8FF;border:1.5px solid #E0DDFF;border-radius:10px;padding:9px 12px;font-size:14px;color:#1a1a2e;font-family:inherit;outline:none;margin-bottom:6px;}
+.font-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
+.font-opt{padding:12px 4px;border-radius:8px;border:1.5px solid #E0DDFF;background:white;font-size:13px;text-align:center;cursor:pointer;color:#444;}
+.font-opt.sel{background:#EEEDFE;border-color:#534AB7;color:#534AB7;}
+.cover-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.cover-opt{cursor:pointer;text-align:center;}
+.cover-opt.sel .cover-prev{border:2.5px solid #534AB7;}
+.cover-prev{height:120px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px solid transparent;margin-bottom:5px;}
+.cover-prev .ct{font-size:13px;font-weight:700;color:white;text-align:center;}
+.cover-prev .cy{font-size:11px;color:rgba(255,255,255,0.8);margin-top:4px;}
+.c1{background:linear-gradient(135deg,#534AB7,#7B72D8);}
+.c2{background:linear-gradient(135deg,#1a1a2e,#534AB7);}
+.c3{background:linear-gradient(135deg,#A32D2D,#DC2626);}
+.c4{background:linear-gradient(135deg,#1a5c2e,#16A34A);}
+.c5{background:#F4F3F8;border:1.5px solid #E0DDFF!important;}
+.c5 .ct{color:#534AB7;}
+.c5 .cy{color:#888;}
+.cover-name{font-size:13px;color:#555;font-weight:500;}
+.layout-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+.layout-opt{cursor:pointer;text-align:center;}
+.layout-opt.sel .layout-prev{border:2.5px solid #534AB7;}
+.layout-prev{height:120px;border-radius:12px;background:white;border:1.5px solid #E0DDFF;padding:10px;display:flex;flex-direction:column;overflow:hidden;margin-bottom:5px;}
+.layout-name{font-size:13px;color:#555;font-weight:500;}
+.lp-date{font-size:9px;font-weight:700;color:#534AB7;margin-bottom:5px;}
+.lp-lines div{height:1.5px;background:#ccc;margin-bottom:5px;}
+.lp-date2{font-size:9px;font-weight:700;color:#333;text-align:center;padding:4px;background:#EEEDFE;border-radius:4px;margin-bottom:5px;}
+.lp-box{flex:1;border:1px solid #E0DDFF;border-radius:2px;}
+.lp-time{font-size:9px;color:#534AB7;font-weight:700;}
+.lp-header4{font-size:9px;font-weight:900;color:#1a1a2e;text-align:center;letter-spacing:1px;}
+.lp-date4{font-size:8px;color:#666;text-align:center;margin-bottom:5px;border-bottom:1px solid #333;}
+.lp-dotgrid{flex:1;background-image:radial-gradient(circle,#ccc 1px,transparent 1px);background-size:4px 4px;}
+.lp-date5{font-size:9px;color:#534AB7;font-weight:700;margin-top:4px;}
+.size-row{display:flex;gap:8px;margin-top:4px;}
+.size-btn{flex:1;padding:9px;border-radius:10px;border:1.5px solid #E0DDFF;background:white;font-size:13px;font-weight:500;cursor:pointer;color:#666;}
+.size-btn.sel{background:#EEEDFE;color:#534AB7;border-color:#534AB7;}
+.cust-actions{display:flex;gap:8px;margin-top:14px;}
+.cust-btn{flex:1;padding:12px;border-radius:12px;border:1.5px solid #534AB7;background:white;font-size:14px;font-weight:600;cursor:pointer;color:#534AB7;}
+.cust-btn.primary{background:#534AB7;color:white;}
+
+/* SETTINGS */
+#page-settings{overflow-y:auto;background:#F4F3F8;flex-direction:column;}
+.set-wrap{padding:16px;padding-bottom:40px;}
+.set-card{background:white;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 2px 12px rgba(83,74,183,0.06);}
+.set-card h3{font-size:15px;font-weight:600;color:#333;margin-bottom:5px;}
+.set-card p{font-size:13px;color:#777;line-height:1.5;margin-bottom:12px;}
+.set-select{width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid #E0DDFF;background:#F9F8FF;font-size:14px;color:#1a1a2e;font-family:inherit;outline:none;margin-bottom:10px;}
+.speed-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.speed-row label{font-size:13px;color:#555;white-space:nowrap;}
+.speed-row input{flex:1;accent-color:#534AB7;}
+.speed-val{font-size:13px;font-weight:600;color:#534AB7;min-width:36px;}
+.set-btn{width:100%;padding:11px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;}
+.set-btn.purple{background:#EEEDFE;color:#534AB7;border:1.5px solid #E0DDFF;}
+.set-btn.red{background:#FEE2E2;color:#DC2626;border:1.5px solid #FECACA;}
+.pin-row{display:flex;gap:8px;margin-bottom:10px;}
+.pin-input{flex:1;padding:12px;border:1.5px solid #E0DDFF;border-radius:10px;font-size:18px;text-align:center;letter-spacing:6px;font-family:inherit;outline:none;background:#F9F8FF;}
+
+/* PIN LOCK SCREEN */
+#pin-screen{display:none;flex-direction:column;min-height:100dvh;background:linear-gradient(160deg,#534AB7,#7B72D8);align-items:center;justify-content:center;padding:24px;}
+#pin-screen h2{color:white;font-size:22px;font-weight:700;margin-bottom:8px;}
+#pin-screen p{color:rgba(255,255,255,0.8);font-size:14px;margin-bottom:32px;}
+.pin-display{display:flex;gap:12px;margin-bottom:32px;}
+.pin-dot{width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,0.3);transition:background 0.2s;}
+.pin-dot.filled{background:white;}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:280px;}
+.pin-key{padding:18px;background:rgba(255,255,255,0.15);border:none;border-radius:16px;font-size:22px;font-weight:600;color:white;cursor:pointer;}
+.pin-key:active{background:rgba(255,255,255,0.3);}
+.pin-error{color:#FCA5A5;font-size:13px;margin-top:12px;min-height:20px;}
+
+/* OVERLAYS */
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:500;display:none;align-items:flex-end;}
+.overlay.show{display:flex;}
+.overlay-panel{background:white;border-radius:20px 20px 0 0;padding:18px 16px 28px;width:100%;max-height:85vh;display:flex;flex-direction:column;}
+.overlay-title{font-size:15px;font-weight:600;color:#1a1a2e;margin-bottom:12px;text-align:center;}
+.overlay-textarea{flex:1;width:100%;border:1.5px solid #E0DDFF;border-radius:12px;padding:12px;font-size:15px;color:#1a1a2e;line-height:1.65;font-family:inherit;outline:none;resize:none;min-height:180px;max-height:50vh;overflow-y:auto;background:#F9F8FF;margin-bottom:12px;}
+.overlay-actions{display:flex;gap:8px;}
+.overlay-cancel{flex:1;padding:12px;background:white;color:#666;border:1.5px solid #ddd;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;}
+.overlay-confirm{flex:2;padding:12px;background:#534AB7;color:white;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;}
+
+/* PREVIEW OVERLAY */
+.prev-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:600;display:none;align-items:flex-end;}
+.prev-overlay.show{display:flex;}
+.prev-modal{background:white;border-radius:20px 20px 0 0;width:100%;max-height:90vh;display:flex;flex-direction:column;}
+.prev-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #eee;}
+.prev-header span{font-size:16px;font-weight:600;}
+.prev-close-btn{background:none;border:none;font-size:22px;cursor:pointer;color:#534AB7;}
+.prev-body{flex:1;overflow:hidden;min-height:380px;position:relative;}
+.prev-pages-wrap{display:flex;transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);}
+.prev-page-slide{min-width:100%;padding:16px;flex-shrink:0;overflow-y:auto;max-height:60vh;}
+.prev-cover-card{border-radius:16px;padding:60px 24px;text-align:center;min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.prev-section-label{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#888;text-align:center;margin-bottom:12px;}
+.prev-diary-page{background:white;border:1px solid #eee;border-radius:12px;padding:14px;margin-bottom:10px;}
+.prev-diary-date{font-size:13px;font-weight:700;color:#534AB7;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #eee;}
+.prev-entry-time{font-size:11px;color:#888;margin-bottom:2px;}
+.prev-entry-text{font-size:13px;color:#333;line-height:1.6;margin-bottom:6px;}
+.prev-back-card{border-radius:16px;padding:40px 24px;min-height:280px;display:flex;align-items:center;justify-content:center;text-align:center;}
+.prev-footer{padding:10px 16px 24px;border-top:1px solid #eee;display:flex;gap:8px;}
+.prev-pay-btn{flex:2;padding:14px;background:#534AB7;color:white;border:none;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;}
+.prev-close-footer{flex:1;padding:14px;background:white;color:#534AB7;border:1.5px solid #534AB7;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;}
+
+/* USER MENU */
+.user-menu{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:700;display:none;align-items:flex-start;justify-content:flex-end;}
+.user-menu.show{display:flex;}
+.user-menu-panel{background:white;border-radius:0 0 0 16px;padding:60px 20px 20px;min-width:220px;}
+.user-menu-email{font-size:13px;color:#888;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #eee;}
+.user-menu-item{display:flex;align-items:center;gap:10px;padding:12px 0;font-size:14px;font-weight:500;color:#333;cursor:pointer;border:none;background:none;width:100%;}
+.user-menu-item.red{color:#DC2626;}
+
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1a2e;color:white;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:500;z-index:999;transition:all 0.3s;opacity:0;white-space:nowrap;pointer-events:none;}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+.sync-indicator{font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px;}
+</style>
+</head>
+<body>
+
+<!-- PIN LOCK SCREEN -->
+<div id="pin-screen">
+  <h2>🔒 My Digital Diary</h2>
+  <p>Enter your PIN to unlock</p>
+  <div class="pin-display">
+    <div class="pin-dot" id="pd1"></div>
+    <div class="pin-dot" id="pd2"></div>
+    <div class="pin-dot" id="pd3"></div>
+    <div class="pin-dot" id="pd4"></div>
+  </div>
+  <div class="pin-keypad">
+    <button class="pin-key" onclick="pinKey('1')">1</button>
+    <button class="pin-key" onclick="pinKey('2')">2</button>
+    <button class="pin-key" onclick="pinKey('3')">3</button>
+    <button class="pin-key" onclick="pinKey('4')">4</button>
+    <button class="pin-key" onclick="pinKey('5')">5</button>
+    <button class="pin-key" onclick="pinKey('6')">6</button>
+    <button class="pin-key" onclick="pinKey('7')">7</button>
+    <button class="pin-key" onclick="pinKey('8')">8</button>
+    <button class="pin-key" onclick="pinKey('9')">9</button>
+    <button class="pin-key" onclick="pinKey('del')" style="font-size:16px;">⌫</button>
+    <button class="pin-key" onclick="pinKey('0')">0</button>
+    <button class="pin-key" onclick="pinKey('ok')" style="font-size:14px;">OK</button>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+</div>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-top">
+    <h1>📔 My Digital Diary</h1>
+    <p>Your personal voice diary, always with you</p>
+  </div>
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign in</button>
+      <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Create account</button>
+    </div>
+    <div id="login-form">
+      <div class="auth-field"><label>Email address</label><input type="email" id="login-email" placeholder="your@email.com"></div>
+      <div class="auth-field"><label>Password</label><div style="position:relative;"><input type="password" id="login-password" placeholder="Your password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('login-password','login-eye')" type="button" id="login-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
+      <button class="auth-submit" onclick="signIn()">Sign in</button>
+      <div class="auth-msg" id="login-msg"></div>
+      <div style="text-align:center;margin-top:14px;">
+        <button onclick="forgotPassword()" style="background:none;border:none;color:#534AB7;font-size:13px;cursor:pointer;text-decoration:underline;">Forgot my password</button>
+      </div>
+    </div>
+    <div id="signup-form" style="display:none;">
+      <div class="auth-field"><label>Email address</label><input type="email" id="signup-email" placeholder="your@email.com"></div>
+      <div class="auth-field"><label>Password (min 6 characters)</label><div style="position:relative;"><input type="password" id="signup-password" placeholder="Choose a password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('signup-password','signup-eye')" type="button" id="signup-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
+      <button class="auth-submit" onclick="signUp()">Create account</button>
+      <div class="auth-msg" id="signup-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD SCREEN -->
+<div id="reset-screen" style="display:none;flex-direction:column;min-height:100dvh;background:linear-gradient(160deg,#534AB7,#7B72D8);">
+  <div class="auth-top">
+    <h1 id="reset-title">🔑 Set a new password</h1>
+    <p id="reset-subtitle">Choose a new password for your account</p>
+  </div>
+  <div class="auth-card">
+    <div id="reset-form-fields">
+      <div class="auth-field"><label>New password (min 6 characters)</label><div style="position:relative;"><input type="password" id="reset-password" placeholder="Choose a new password" style="width:100%;padding:13px 44px 13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"><button onclick="togglePwd('reset-password','reset-eye')" type="button" id="reset-eye" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;">👁️</button></div></div>
+      <div class="auth-field"><label>Confirm new password</label><input type="password" id="reset-password-confirm" placeholder="Type it again" style="width:100%;padding:13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"></div>
+      <button class="auth-submit" onclick="confirmNewPassword()">Save new password</button>
+    </div>
+    <div id="reset-expired-fields" style="display:none;">
+      <div class="auth-field"><label>Email address</label><input type="email" id="reset-expired-email" placeholder="you@example.com" style="width:100%;padding:13px 14px;border:1.5px solid #E0DDFF;border-radius:12px;font-size:15px;color:#1a1a2e;font-family:inherit;outline:none;background:#F9F8FF;"></div>
+      <button class="auth-submit" onclick="resendResetLink()">Send me a new link</button>
+    </div>
+    <div class="auth-msg" id="reset-msg"></div>
+  </div>
+</div>
+<div id="onboard-screen">
+  <div class="ob-slides-wrapper"><div class="ob-slides" id="ob-slides">
+    <div class="ob-slide active">
+      <div class="ob-icon">🎙️</div>
+      <div class="ob-title">Speak your thoughts</div>
+      <div class="ob-text">Tap the mic button and speak freely. Your voice is converted to text automatically.</div>
+    </div>
+    <div class="ob-slide">
+      <div class="ob-icon">📖</div>
+      <div class="ob-title">Your diary, organised</div>
+      <div class="ob-text">Every entry is saved by date and time. Flip through pages or jump to any day instantly.</div>
+    </div>
+    <div class="ob-slide">
+      <div class="ob-icon">☁️</div>
+      <div class="ob-title">Safe in the cloud</div>
+      <div class="ob-text">Your diary is saved to your account. Switch devices anytime — your entries are always there.</div>
+    </div>
+  </div></div>
+  <div class="ob-dots" id="ob-dots">
+    <div class="ob-dot active" onclick="goSlide(0)"></div>
+    <div class="ob-dot" onclick="goSlide(1)"></div>
+    <div class="ob-dot" onclick="goSlide(2)"></div>
+  </div>
+  <button class="ob-next" id="ob-next" onclick="nextSlide()">Next →</button>
+  <div class="ob-skip" onclick="finishOnboard()">Skip intro</div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app-screen">
+  <div class="offline-banner" id="offline-banner">⚠️ You're offline — voice recording unavailable. You can still type entries.</div>
+  <div class="topbar">
+    <div>
+      <h1>My Digital Diary</h1>
+      <p id="topbar-date"></p>
+    </div>
+    <div class="topbar-right">
+      <div id="sync-status" class="sync-indicator"></div>
+      <button class="user-btn" onclick="toggleUserMenu()" aria-label="Account">👤</button>
+    </div>
+  </div>
+  <div class="nav">
+    <button class="nb active" onclick="showPage('record',this)"><span>🎙️</span>Record</button>
+    <button class="nb" onclick="showFreeVersion(this)"><span>🎁</span>Free</button>
+    <button class="nb" onclick="showPage('diary',this)"><span>📖</span>Diary</button>
+    <button class="nb" onclick="showPage('export',this)"><span>📤</span>Export</button>
+    <button class="nb" onclick="showPage('settings',this)"><span>⚙️</span>Settings</button>
+  </div>
+
+  <!-- RECORD PAGE -->
+  <div id="page-record" class="page active">
+    <div id="safety-banner" style="display:none;"></div>
+    <div id="free-version-banner" style="display:none;background:linear-gradient(135deg,#534AB7,#7B72D8);color:#fff;border-radius:14px;padding:14px 16px;margin:12px 0 0;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">🎁 You're using the Free Version</div>
+      <div style="font-size:13px;opacity:0.9;">Unlimited voice & typed diary entries, completely free — no photos in this mode. Want photos too? Go to Export → Add more photos.</div>
+    </div>
+    <div style="padding:12px 0 0;">
+      <div class="streak-bar" id="streak-bar" style="margin:0 0 0 0;display:none;">
+        <div class="streak-flame">🔥</div>
+        <div class="streak-info"><h4 id="streak-title">3 day streak!</h4><p>Keep writing every day</p></div>
+        <div class="streak-count" id="streak-count">3</div>
+      </div>
+    </div>
+    <div class="rec-card" style="margin-top:12px;">
+      <input class="topic-input" id="topic-field" type="text" placeholder="Theme / topic for today (optional)…" maxlength="60">
+      <div class="mic-ring" id="mic-ring">
+        <button class="mic-btn" id="mic-btn" onclick="toggleRec()" aria-label="Record">🎙️</button>
+      </div>
+      <div class="rec-status" id="rec-status">Tap the mic to start recording</div>
+      <div class="rec-timer" id="rec-timer">00:00</div>
+      <div id="mic-area">
+        <div class="transcript-box" id="transcript-box">
+          <span id="placeholder" style="color:#bbb;font-style:italic;font-size:13px;">Your words will appear here as you speak…</span>
+          <span id="live-text"></span>
+        </div>
+        <div class="word-count" id="word-count"></div>
+        <button class="edit-inline-btn" id="edit-inline-btn" onclick="openEditOverlay('inline')">✏️ Edit text</button>
+      </div>
+      <div class="type-area" id="type-area">
+        <textarea class="manual-input" id="manual-input" placeholder="Type your diary entry here…" oninput="onManualType()"></textarea>
+        <div class="word-count" id="word-count-type"></div>
+      </div>
+      <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">✏️ Type instead</button>
+      <div class="photo-section" id="photo-section">
+        <div class="photo-grid" id="photo-grid"></div>
+        <div style="display:flex;gap:8px;">
+          <button class="photo-btn" onclick="takePhoto()" id="photo-take-btn" style="flex:1;">📸 Take a photo</button>
+          <button class="photo-btn" onclick="addPhoto()" id="photo-add-btn" style="flex:1;">🖼️ Upload photo</button>
+        </div>
+      </div>
+      <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoSelect(this)">
+      <input type="file" id="photo-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(this)">
+      <button class="save-btn" id="save-btn" onclick="saveEntry()" disabled>💾 Save to my diary</button>
+      <button class="delete-btn" id="delete-btn" onclick="discardEntry()">🗑 Delete note</button>
+      <button class="append-btn" id="append-btn" onclick="appendToLast()">➕ Add to last entry</button>
+    </div>
+    <p class="hint" id="ios-hint" style="display:none;color:#DC2626;">iPhone users: please open in Safari for voice recording.</p>
+    <p class="hint">Tap the mic and speak clearly. Chrome converts your voice to text automatically.</p>
+  </div>
+
+  <!-- DIARY PAGE -->
+  <div id="page-diary" class="page">
+    <div class="diary-nav">
+      <input type="text" class="diary-search" id="diary-search" placeholder="🔍 Search entries…" oninput="searchDiary(this.value)">
+      <input type="date" class="diary-date-jump" id="diary-date-jump" onchange="jumpToDate(this.value)">
+      <div class="view-toggle">
+        <button class="vb active" id="vb-scroll" onclick="switchView('scroll')">☰</button>
+        <button class="vb" id="vb-page" onclick="switchView('page')">⧉</button>
+      </div>
+    </div>
+    <div id="diary-scroll"><div id="diary-content"></div></div>
+    <div id="diary-page-view">
+      <div class="page-container" id="page-container"></div>
+      <div class="page-flip-nav">
+        <button class="flip-arrow" id="prev-btn" onclick="flipPage(-1)">‹</button>
+        <span class="page-counter" id="page-counter"></span>
+        <button class="flip-arrow" id="next-btn" onclick="flipPage(1)">›</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPORT PAGE -->
+  <div id="page-export" class="page">
+    <div class="exp-wrap">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-num" id="stat-entries">0</div><div class="stat-label">Total entries</div></div>
+        <div class="stat-card"><div class="stat-num" id="stat-days">0</div><div class="stat-label">Days recorded</div></div>
+      </div>
+      <div class="exp-card">
+        <h3>📤 Export &amp; backup</h3>
+        <p>Keep your diary safe — export regularly.</p>
+        <div class="exp-row" onclick="exportText()"><div class="exp-icon p">📄</div><div><div class="exp-row-label">Download as text file</div><div class="exp-row-sub">Free — instant download</div></div></div>
+        <div class="exp-row" onclick="exportJSON()"><div class="exp-icon b">💾</div><div><div class="exp-row-label">Backup diary data (JSON)</div><div class="exp-row-sub">Free — restore on any device</div></div></div>
+        <div class="exp-row" onclick="importJSON()"><div class="exp-icon g">📥</div><div><div class="exp-row-label">Restore from backup</div><div class="exp-row-sub">Import a previous JSON backup</div></div></div>
+      </div>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(this)">
+      <div class="exp-card">
+        <h3>📸 Add more photos</h3>
+        <p>Your free plan includes a daily photo allowance. Upgrade any time for more — your voice and typed entries are always unlimited either way.</p>
+        <div class="exp-row" onclick="showUpgradeModal()"><div class="exp-icon p">⬆️</div><div><div class="exp-row-label">View photo upgrade plans</div><div class="exp-row-sub">From <span id="exp-tier1-price"></span></div></div></div>
+      </div>
+      <div class="exp-card">
+        <h3>🎨 Customise your diary</h3>
+        <p>Design your personal printed diary.</p>
+        <div class="exp-row cust-toggle" onclick="toggleCust()"><div class="exp-icon g">✨</div><div style="flex:1"><div class="exp-row-label" style="color:#534AB7">Customise your diary</div><div class="exp-row-sub">Tap to open options</div></div><span id="cust-arrow" style="font-size:18px;color:#534AB7">›</span></div>
+        <div class="cust-panel" id="cust-panel">
+          <div class="sub-tabs">
+            <button class="sub-tab active" id="st-name" onclick="showSub('name')">📝 Name</button>
+            <button class="sub-tab" id="st-cover" onclick="showSub('cover')">🎨 Cover</button>
+            <button class="sub-tab" id="st-page" onclick="showSub('page')">📄 Page</button>
+          </div>
+          <div class="sub-content active" id="sc-name">
+            <div class="cl">Your name on the cover</div>
+            <input class="ci" id="cust-name" type="text" placeholder="e.g. Andrew van der Merwe">
+            <div class="cl">Diary year</div>
+            <input class="ci" id="cust-year" type="number" value="2026" min="2020" max="2035">
+            <div class="cl">Font style</div>
+            <div class="font-grid">
+              <div class="font-opt sel" data-font="1" onclick="selFont(1)" style="font-family:serif">Serif</div>
+              <div class="font-opt" data-font="2" onclick="selFont(2)">Sans</div>
+              <div class="font-opt" data-font="3" onclick="selFont(3)" style="font-style:italic">Italic</div>
+              <div class="font-opt" data-font="4" onclick="selFont(4)" style="font-family:monospace">Mono</div>
+              <div class="font-opt" data-font="5" onclick="selFont(5)" style="font-weight:700">Bold</div>
+            </div>
+          </div>
+          <div class="sub-content" id="sc-cover">
+            <div class="cl">Choose a cover design</div>
+            <div class="cover-grid">
+              <div class="cover-opt sel" data-cv="1" onclick="selCover(1)"><div class="cover-prev c1"><div class="ct">My Diary</div><div class="cy">2026</div></div><div class="cover-name">Classic</div></div>
+              <div class="cover-opt" data-cv="2" onclick="selCover(2)"><div class="cover-prev c2"><div class="ct">My Diary</div><div class="cy">2026</div></div><div class="cover-name">Elegant</div></div>
+              <div class="cover-opt" data-cv="3" onclick="selCover(3)"><div class="cover-prev c3"><div class="ct">My Diary</div><div class="cy">2026</div></div><div class="cover-name">Bold</div></div>
+              <div class="cover-opt" data-cv="4" onclick="selCover(4)"><div class="cover-prev c4"><div class="ct">My Diary</div><div class="cy">2026</div></div><div class="cover-name">Nature</div></div>
+              <div class="cover-opt" data-cv="5" onclick="selCover(5)"><div class="cover-prev c5"><div class="ct" style="color:#534AB7">My Diary</div><div class="cy" style="color:#888">2026</div></div><div class="cover-name">Minimal</div></div>
+            </div>
+            <div class="cl" style="margin-top:14px">Print size</div>
+            <div class="size-row">
+              <button class="size-btn sel" id="sz-a5" onclick="selSize('A5')">A5 — Pocket</button>
+              <button class="size-btn" id="sz-a4" onclick="selSize('A4')">A4 — Full size</button>
+            </div>
+          </div>
+          <div class="sub-content" id="sc-page">
+            <div class="cl">Choose a page layout</div>
+            <div class="layout-grid">
+              <div class="layout-opt sel" data-ly="1" onclick="selLayout(1)"><div class="layout-prev l1"><div class="lp-date">Mon 15 June</div><div class="lp-lines"><div></div><div></div><div></div></div></div><div class="layout-name">Classic</div></div>
+              <div class="layout-opt" data-ly="2" onclick="selLayout(2)"><div class="layout-prev l2"><div class="lp-date2">Mon 15 June</div><div class="lp-box"></div></div><div class="layout-name">Clean box</div></div>
+              <div class="layout-opt" data-ly="3" onclick="selLayout(3)"><div class="layout-prev l3"><div class="lp-time">08:05</div><div class="lp-lines"><div></div><div></div></div><div class="lp-time">17:30</div><div class="lp-lines"><div></div><div></div></div></div><div class="layout-name">Time stamps</div></div>
+              <div class="layout-opt" data-ly="4" onclick="selLayout(4)"><div class="layout-prev l4"><div class="lp-header4">MY DIARY</div><div class="lp-date4">15 June 2026</div><div class="lp-lines"><div></div><div></div><div></div></div></div><div class="layout-name">Formal</div></div>
+              <div class="layout-opt" data-ly="5" onclick="selLayout(5)"><div class="layout-prev l5"><div class="lp-dotgrid"></div><div class="lp-date5">15 June</div></div><div class="layout-name">Dot grid</div></div>
+            </div>
+          </div>
+          <div class="cust-actions">
+            <button class="cust-btn" onclick="showPreview()">👁 Preview</button>
+            <button class="cust-btn primary" onclick="initPayment('customise')">Pay $3</button>
+          </div>
+        </div>
+      </div>
+      <div class="exp-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px"><h3>🖨️ Print ready PDF</h3><span class="exp-badge gold">$2</span></div>
+        <p>Professional print-ready PDF for A4 or A5 printing.</p>
+        <div class="exp-row" onclick="initPayment('print')"><div class="exp-icon r">🖨️</div><div><div class="exp-row-label">Generate print-ready PDF</div><div class="exp-row-sub">$2 — pay &amp; download</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS PAGE -->
+  <div id="page-settings" class="page">
+    <div class="set-wrap">
+      <div class="set-card">
+        <h3>🎙️ Playback voice</h3>
+        <p>Choose the voice used when you tap Play.</p>
+        <select class="set-select" id="voice-select" onchange="saveVoice()"><option value="">Loading voices…</option></select>
+        <div class="speed-row"><label>Speed:</label><input type="range" id="speed-slider" min="0.5" max="1.5" step="0.1" value="0.95" oninput="updateSpeed()"><span class="speed-val" id="speed-val">0.95x</span></div>
+        <button class="set-btn purple" onclick="testVoice()">▶ Test this voice</button>
+      </div>
+      <div class="set-card">
+        <h3>🌐 Recording language</h3>
+        <p>Choose the language Chrome listens in.</p>
+        <select class="set-select" id="lang-select" onchange="saveLang()">
+          <option value="en-ZA">English (South Africa)</option>
+          <option value="en-US">English (United States)</option>
+          <option value="en-GB">English (United Kingdom)</option>
+          <option value="en-AU">English (Australia)</option>
+          <option value="af-ZA">Afrikaans</option>
+          <option value="zu-ZA">Zulu</option>
+          <option value="xh-ZA">Xhosa</option>
+        </select>
+      </div>
+      <div class="set-card">
+        <h3>📶 Photo uploads</h3>
+        <p>Save mobile data by only uploading photos when connected to WiFi. Your diary text always saves and syncs normally either way.</p>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#333;margin-top:8px;cursor:pointer;">
+          <input type="checkbox" id="wifi-only-toggle" onchange="saveWifiOnlyPref()" style="width:18px;height:18px;">
+          Only upload photos on WiFi
+        </label>
+        <p id="queued-photo-indicator" style="display:none;margin-top:10px;font-size:13px;color:#534AB7;font-weight:600;"></p>
+      </div>
+      <div class="set-card">
+        <h3>🔒 PIN lock</h3>
+        <p>Protect your diary with a 4-digit PIN.</p>
+        <div class="pin-row"><input class="pin-input" id="new-pin" type="password" maxlength="4" placeholder="••••" inputmode="numeric"></div>
+        <button class="set-btn purple" onclick="savePin()">Set PIN</button>
+        <button class="set-btn red" onclick="removePin()">Remove PIN</button>
+      </div>
+      <div class="set-card">
+        <h3>📱 Add to home screen</h3>
+        <p>Open this app in Chrome, tap the 3-dot menu → "Add to Home screen" to use it like a real app.</p>
+      </div>
+      <div class="set-card">
+        <h3>🆘 Support</h3>
+        <p>Need help? Tap below to send us an email and we'll get back to you as soon as possible.</p>
+        <button class="set-btn purple" onclick="openSupport()">📧 Contact support</button>
+      </div>
+      <div class="set-card">
+        <h3>ℹ️ About</h3>
+        <p>My Digital Diary v3.0<br>Built by Andrew — powered by Supabase</p>
+        <button class="set-btn purple" style="margin-top:10px;" onclick="replayIntro()">▶ Replay intro</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- USER MENU -->
+<div class="user-menu" id="user-menu" onclick="closeUserMenu(event)">
+  <div class="user-menu-panel">
+    <div class="user-menu-email" id="user-menu-email">Loading…</div>
+    <button class="user-menu-item" onclick="showPage('settings', document.querySelector('.nb:last-child'));closeUserMenu()">⚙️ Settings</button>
+    <button class="user-menu-item red" onclick="signOut()">🚪 Sign out</button>
+  </div>
+</div>
+
+<!-- EDIT OVERLAY -->
+<div class="overlay" id="edit-overlay" onclick="overlayBgClick(event)">
+  <div class="overlay-panel">
+    <div class="overlay-title">✏️ Edit your entry</div>
+    <textarea class="overlay-textarea" id="edit-textarea"></textarea>
+    <div class="overlay-actions">
+      <button class="overlay-cancel" onclick="closeOverlay()">Cancel</button>
+      <button class="overlay-confirm" onclick="confirmEdit()">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- PREVIEW OVERLAY -->
+<div class="prev-overlay" id="prev-overlay">
+  <div class="prev-modal">
+    <div class="prev-header">
+      <button class="prev-close-btn" onclick="flipPreview(-1)" id="prev-flip-back">‹</button>
+      <span id="prev-page-label">Cover</span>
+      <button class="prev-close-btn" onclick="flipPreview(1)" id="prev-flip-fwd">›</button>
+    </div>
+    <div class="prev-body" id="prev-body">
+      <div id="prev-pages-wrap" class="prev-pages-wrap"></div>
+    </div>
+    <div class="prev-footer">
+      <button class="prev-close-footer" onclick="closePreview()">Close</button>
+      <button class="prev-pay-btn" onclick="initPayment('customise')">Pay $3 &amp; Download</button>
+    </div>
+  </div>
+</div>
+
+<div class="photo-viewer" id="photo-viewer">
+  <button class="photo-viewer-close" onclick="closePhotoViewer()">✕</button>
+  <img id="photo-viewer-img" src="" alt="diary photo">
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── SUPABASE ──
+const SUPA_URL='https://fzehrjppccsuiqtxbzeo.supabase.co';
+const SUPA_KEY='sb_publishable_qZY6YQvqaqGD9-GxMQSogw_CMFST2OB';
+const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+
+// ── STATE ──
+var currentUser=null, isRec=false, recognition=null, timerInt=null, secs=0, transcript='';
+var typingMode=false, editMode='', editEntryId=null;
+var selCoverN=1,selLayoutN=1,selFontN=1,selSizeS='A5',custOpen=false;
+var diaryDates=[],curPage=0,curView='scroll',voices=[];
+var prevPageIndex=0,prevPages=[];
+var pinEntry='', obSlide=0;
+var coverBgs={'1':'linear-gradient(135deg,#534AB7,#7B72D8)','2':'linear-gradient(135deg,#1a1a2e,#534AB7)','3':'linear-gradient(135deg,#A32D2D,#DC2626)','4':'linear-gradient(135deg,#1a5c2e,#16A34A)','5':'#F4F3F8'};
+var coverTxt={'1':'white','2':'white','3':'white','4':'white','5':'#534AB7'};
+
+// ── LOCAL CACHE ──
+function getCached(){try{return JSON.parse(localStorage.getItem('mdd_cache')||'[]');}catch(e){return[];}}
+function setCached(a){localStorage.setItem('mdd_cache',JSON.stringify(a));}
+
+// ── INIT ──
+async function init(){
+  // Check online
+  updateOnlineStatus();
+  window.addEventListener('online',updateOnlineStatus);
+  window.addEventListener('offline',updateOnlineStatus);
+
+  // iOS check
+  var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  if(isIOS) document.getElementById('ios-hint').style.display='block';
+
+  // Check directly if this page load is a password recovery link BEFORE anything else,
+  // since Supabase can fire the PASSWORD_RECOVERY event before any listener is attached.
+  var urlHasRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
+  // An EXPIRED or already-used recovery link doesn't arrive as type=recovery at all —
+  // Supabase instead redirects with error=access_denied / error_code=otp_expired in the
+  // URL hash. Without checking for this separately, an expired link would previously fall
+  // through to the normal sign-in screen with no explanation, or show a broken password
+  // form that fails confusingly on submit.
+  var urlHasExpiredRecovery = (window.location.hash.includes('error=') || window.location.search.includes('error=')) &&
+    (window.location.hash.includes('otp_expired') || window.location.hash.includes('access_denied') ||
+     window.location.search.includes('otp_expired') || window.location.search.includes('access_denied'));
+  if(urlHasExpiredRecovery){
+    document.getElementById('pin-screen').style.display='none';
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('onboard-screen').style.display='none';
+    document.getElementById('app-screen').style.display='none';
+    document.getElementById('reset-screen').style.display='flex';
+    showExpiredResetLinkUI();
+  } else if(urlHasRecovery){
+    document.getElementById('pin-screen').style.display='none';
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('onboard-screen').style.display='none';
+    document.getElementById('app-screen').style.display='none';
+    document.getElementById('reset-screen').style.display='flex';
+  }
+
+  // Attach the listener BEFORE awaiting getSession, so we never miss an early-firing event
+  sb.auth.onAuthStateChange(function(event,session){
+    if(event==='PASSWORD_RECOVERY'){
+      document.getElementById('pin-screen').style.display='none';
+      document.getElementById('auth-screen').style.display='none';
+      document.getElementById('onboard-screen').style.display='none';
+      document.getElementById('app-screen').style.display='none';
+      document.getElementById('reset-screen').style.display='flex';
+      return;
+    }
+    if(event==='SIGNED_IN'&&session){
+      if(document.getElementById('reset-screen').style.display==='flex') return; // don't jump to app mid-reset
+      currentUser=session.user;
+      var showed=localStorage.getItem('mdd_ob_done');
+      if(!showed) showOnboarding(); else showApp();
+    }
+    if(event==='SIGNED_OUT'){
+      currentUser=null;
+      document.getElementById('app-screen').style.display='none';
+      document.getElementById('auth-screen').style.display='flex';
+    }
+  });
+
+  if(urlHasRecovery || urlHasExpiredRecovery) return; // reset-screen is already showing, skip the normal session check below
+
+  // Check PIN
+  var pin=localStorage.getItem('mdd_pin');
+  if(pin){
+    document.getElementById('pin-screen').style.display='flex';
+    return;
+  }
+
+  // Check auth
+  var {data:{session}}=await sb.auth.getSession();
+  if(session){
+    currentUser=session.user;
+    var showed=localStorage.getItem('mdd_ob_done');
+    if(!showed){
+      showOnboarding();
+    } else {
+      showApp();
+    }
+  } else {
+    document.getElementById('auth-screen').style.display='flex';
+  }
+}
+
+function updateOnlineStatus(){
+  var offline=!navigator.onLine;
+  document.getElementById('offline-banner').classList.toggle('show',offline);
+  if(!offline && currentUser){
+    // Auto sync when coming back online
+    syncEntries();
+  }
+}
+
+// ── PIN ──
+function pinKey(k){
+  var err=document.getElementById('pin-error');
+  err.textContent='';
+  if(k==='del'){pinEntry=pinEntry.slice(0,-1);}
+  else if(k==='ok'||pinEntry.length===4){
+    if(k!=='ok') pinEntry+=k;
+    var saved=localStorage.getItem('mdd_pin');
+    if(pinEntry===saved){
+      document.getElementById('pin-screen').style.display='none';
+      init();
+    } else {
+      err.textContent='Incorrect PIN. Try again.';
+      pinEntry='';
+    }
+  } else {
+    pinEntry+=k;
+  }
+  for(var i=1;i<=4;i++){
+    document.getElementById('pd'+i).classList.toggle('filled',i<=pinEntry.length);
+  }
+}
+
+function savePin(){
+  var p=document.getElementById('new-pin').value;
+  if(p.length!==4||!/^\d{4}$/.test(p)){showToast('PIN must be exactly 4 digits');return;}
+  localStorage.setItem('mdd_pin',p);
+  document.getElementById('new-pin').value='';
+  showToast('PIN set successfully 🔒');
+}
+
+function removePin(){
+  localStorage.removeItem('mdd_pin');
+  showToast('PIN removed');
+}
+
+// ── ONBOARDING ──
+function showOnboarding(){
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('onboard-screen').style.display='flex';
+  document.getElementById('onboard-screen').style.flexDirection='column';
+}
+
+function goSlide(n){
+  obSlide=n;
+  document.querySelectorAll('.ob-slide').forEach(function(s,i){s.classList.toggle('active',i===n);});
+  document.querySelectorAll('.ob-dot').forEach(function(d,i){d.classList.toggle('active',i===n);});
+  document.getElementById('ob-next').textContent=n===2?'Get started →':'Next →';
+}
+
+function nextSlide(){
+  if(obSlide<2) goSlide(obSlide+1);
+  else finishOnboard();
+}
+
+function finishOnboard(){
+  localStorage.setItem('mdd_ob_done','1');
+  document.getElementById('onboard-screen').style.display='none';
+  showApp();
+}
+
+// ── APP ──
+async function showApp(){
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('onboard-screen').style.display='none';
+  document.getElementById('app-screen').style.display='flex';
+  document.getElementById('app-screen').style.flexDirection='column';
+
+  var now=new Date();
+  document.getElementById('topbar-date').textContent=now.toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  var dj=document.getElementById('diary-date-jump'); if(dj) dj.max=localDateStr(now);
+
+  // Safety banner
+  var dismissed=localStorage.getItem('mdd_safety_dismissed');
+  if(!dismissed) document.getElementById('safety-banner').style.display='flex';
+
+  // User menu email
+  if(currentUser) document.getElementById('user-menu-email').textContent=currentUser.email;
+
+  // Voice settings
+  if('speechSynthesis' in window){window.speechSynthesis.onvoiceschanged=loadVoices;loadVoices();}
+  var sp=localStorage.getItem('mdd_spd'); if(sp){document.getElementById('speed-slider').value=sp;document.getElementById('speed-val').textContent=parseFloat(sp).toFixed(2)+'x';}
+  var lg=localStorage.getItem('mdd_lang'); if(lg){var ls=document.getElementById('lang-select');if(ls)ls.value=lg;}
+  loadWifiOnlyPref();
+
+  await syncEntries();
+  updateStats();
+  updateStreak();
+  checkAppendAvailable();
+  await loadUserTier();
+  await updateQueuedPhotoIndicator();
+  await processWifiQueue();
+  checkBackupAge();
+
+  // Auto sync every 30 seconds when online
+  setInterval(function(){
+    if(navigator.onLine && currentUser){
+      syncEntries();
+      processWifiQueue();
+      checkBackupAge();
+    }
+  }, 30000);
+}
+
+function dismissSafety(){ document.getElementById('safety-banner').style.display='none'; }
+
+// ── AUTH ──
+function switchAuthTab(t){
+  document.getElementById('tab-login').classList.toggle('active',t==='login');
+  document.getElementById('tab-signup').classList.toggle('active',t==='signup');
+  document.getElementById('login-form').style.display=t==='login'?'block':'none';
+  document.getElementById('signup-form').style.display=t==='signup'?'block':'none';
+}
+
+async function signIn(){
+  var email=document.getElementById('login-email').value.trim();
+  var pass=document.getElementById('login-password').value;
+  var msg=document.getElementById('login-msg');
+  msg.textContent='Signing in…'; msg.className='auth-msg';
+  var {error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){msg.textContent=error.message;msg.className='auth-msg error';}
+  else{msg.textContent='';} 
+}
+
+function togglePwd(inputId, btnId){
+  var input=document.getElementById(inputId);
+  var btn=document.getElementById(btnId);
+  if(!input||!btn) return;
+  var isHidden=input.type==='password';
+  input.setAttribute('type', isHidden?'text':'password');
+  btn.textContent=isHidden?'🙈':'👁️';
+  var pos=input.value.length;
+  input.focus();
+  try{ input.setSelectionRange(pos,pos); }catch(e){}
+}
+
+async function forgotPassword(){
+  var email=document.getElementById('login-email').value.trim();
+  var msg=document.getElementById('login-msg');
+  if(!email){msg.textContent='Enter your email address above first.';msg.className='auth-msg error';return;}
+  msg.textContent='Sending reset email…';msg.className='auth-msg';
+  var {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
+  if(error){msg.textContent=error.message;msg.className='auth-msg error';}
+  else{msg.textContent='Password reset email sent! Check your inbox.';msg.className='auth-msg success';}
+}
+
+function showExpiredResetLinkUI(){
+  // Friendly explanation instead of a broken password form or a raw Supabase error —
+  // also gives a direct, one-tap way to request a new link without navigating away first.
+  document.getElementById('reset-title').textContent='⏰ This link has expired';
+  document.getElementById('reset-subtitle').textContent='Password reset links only work for a little while, for your security. No problem — just request a new one below.';
+  document.getElementById('reset-form-fields').style.display='none';
+  document.getElementById('reset-expired-fields').style.display='block';
+}
+
+async function resendResetLink(){
+  var email=document.getElementById('reset-expired-email').value.trim();
+  var msg=document.getElementById('reset-msg');
+  if(!email){msg.textContent='Enter your email address above first.';msg.className='auth-msg error';return;}
+  msg.textContent='Sending a new link…';msg.className='auth-msg';
+  // Explicitly use the clean app URL, NOT window.location.href — at this point the
+  // current URL still contains the broken #error=... fragment from the expired link,
+  // and baking that into the new email's redirect would just recreate the same problem.
+  var cleanAppUrl='https://verkerkand-cyber.github.io/my-digital-diary/';
+  var {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:cleanAppUrl});
+  if(error){msg.textContent=error.message;msg.className='auth-msg error';}
+  else{msg.textContent='New reset link sent! Check your inbox.';msg.className='auth-msg success';}
+}
+
+async function confirmNewPassword(){
+  var pass=document.getElementById('reset-password').value;
+  var confirm=document.getElementById('reset-password-confirm').value;
+  var msg=document.getElementById('reset-msg');
+  if(pass.length<6){msg.textContent='Password must be at least 6 characters.';msg.className='auth-msg error';return;}
+  if(pass!==confirm){msg.textContent='Passwords do not match. Try again.';msg.className='auth-msg error';return;}
+  msg.textContent='Saving new password…';msg.className='auth-msg';
+  var {error}=await sb.auth.updateUser({password:pass});
+  if(error){
+    // A link that looked valid when the page loaded can still expire in the time it takes
+    // someone to type a new password — switch to the same friendly expired-link UI rather
+    // than leaving them stuck on a password form that will never successfully submit.
+    var msgLower=(error.message||'').toLowerCase();
+    if(msgLower.includes('expired')||msgLower.includes('invalid')||msgLower.includes('token')){
+      showExpiredResetLinkUI();
+      msg.textContent='';
+    } else {
+      msg.textContent='Something went wrong saving your password. Please try again.';
+      msg.className='auth-msg error';
+    }
+    return;
+  }
+  msg.textContent='Password updated! Taking you to your diary…';msg.className='auth-msg success';
+  var {data:{session}}=await sb.auth.getSession();
+  setTimeout(function(){
+    document.getElementById('reset-screen').style.display='none';
+    if(session){
+      currentUser=session.user;
+      var showed=localStorage.getItem('mdd_ob_done');
+      if(!showed) showOnboarding(); else showApp();
+    } else {
+      document.getElementById('auth-screen').style.display='flex';
+    }
+  },1200);
+}
+
+async function signUp(){
+  var email=document.getElementById('signup-email').value.trim();
+  var pass=document.getElementById('signup-password').value;
+  var msg=document.getElementById('signup-msg');
+  if(!email){msg.textContent='Please enter your email.';msg.className='auth-msg error';return;}
+  if(pass.length<6){msg.textContent='Password must be at least 6 characters.';msg.className='auth-msg error';return;}
+  msg.textContent='Creating account…'; msg.className='auth-msg';
+  // Explicitly set the redirect URL rather than relying on Supabase's dashboard-configured
+  // Site URL as a fallback (passing null) — a real user got a confirmation link that landed
+  // on the bare github.io domain instead of the actual /my-digital-diary/ app path, which
+  // 404'd. Being explicit here removes any dependency on that dashboard setting working
+  // exactly as expected.
+  var {data,error}=await sb.auth.signUp({email,password:pass,options:{emailRedirectTo:'https://verkerkand-cyber.github.io/my-digital-diary/'}});
+  if(error){msg.textContent=error.message;msg.className='auth-msg error';}
+  else if(data&&data.user&&data.user.identities&&data.user.identities.length===0){
+    msg.textContent='An account with this email already exists. Please sign in.';msg.className='auth-msg error';
+  } else {
+    // Auto sign in after signup
+    msg.textContent='Account created! Signing you in…';msg.className='auth-msg success';
+    var {error:signinErr}=await sb.auth.signInWithPassword({email,password:pass});
+    if(signinErr){msg.textContent='Account created! Please sign in.';msg.className='auth-msg success';}
+  }
+}
+
+async function signOut(){
+  await sb.auth.signOut();
+  setCached([]);
+  closeUserMenu();
+}
+
+function toggleUserMenu(){document.getElementById('user-menu').classList.toggle('show');}
+function closeUserMenu(e){if(!e||e.target===document.getElementById('user-menu'))document.getElementById('user-menu').classList.remove('show');}
+
+// ── SYNC ──
+async function syncEntries(){
+  if(!currentUser||!navigator.onLine) return;
+  setSyncStatus('Syncing…');
+
+  // Push any entries still marked as pending (failed or offline saves)
+  var local=getCached();
+  var pending=local.filter(function(e){ return e.pendingSync; });
+  for(var i=0;i<pending.length;i++){
+    var e=pending[i];
+    var {data:ins,error:insErr}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:e.date,day_name:e.dayName,time:e.time,topic:e.topic,text:e.text,photos:e.photos||[]}).select();
+    if(!insErr && ins && ins[0]){
+      local=local.map(function(x){ return x.id===e.id?Object.assign({},x,{id:ins[0].id,pendingSync:false}):x; });
+      setCached(local);
+    }
+  }
+
+  // Pull latest from cloud
+  var {data,error}=await sb.from('diary_entries').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:false});
+  if(!error&&data){
+    var cloudMapped=data.map(function(r){return{id:r.id,date:r.date,dayName:r.day_name,time:r.time,topic:r.topic||'',text:r.text,photos:r.photos||[]};});
+    // Keep any local entries still pending sync (not yet in cloud) so they don't disappear
+    var stillPending=getCached().filter(function(e){ return e.pendingSync; });
+    var merged=stillPending.concat(cloudMapped);
+    setCached(merged);
+    setSyncStatus('✓ Synced');
+    setTimeout(function(){setSyncStatus('');},2000);
+  } else if(error){
+    setSyncStatus('');
+    // Do NOT clear local cache on a failed pull — local entries stay safe
+  }
+}
+
+function setSyncStatus(s){document.getElementById('sync-status').textContent=s;}
+
+async function saveToCloud(entry){
+  if(!currentUser){ showToast('Saved locally — sign in to sync'); return; }
+  if(!navigator.onLine){ showToast('Offline — saved locally, will sync later'); return; }
+  var {data,error}=await sb.from('diary_entries').insert({user_id:currentUser.id,date:entry.date,day_name:entry.dayName,time:entry.time,topic:entry.topic,text:entry.text,photos:entry.photos||[]}).select();
+  if(error){
+    showToast('Sync error — saved locally, will retry');
+  } else if(data && data[0]){
+    // Replace temp id with the real cloud id so future syncs don't duplicate or lose this entry
+    var entries=getCached();
+    entries=entries.map(function(x){
+      return x.id===entry.id ? Object.assign({},x,{id:data[0].id,pendingSync:false}) : x;
+    });
+    setCached(entries);
+    setSyncStatus('✓ Saved');
+  }
+}
+
+async function deleteFromCloud(id){
+  if(!currentUser||!navigator.onLine) return;
+  await sb.from('diary_entries').delete().eq('id',id).eq('user_id',currentUser.id);
+}
+
+async function updateInCloud(id,text){
+  if(!currentUser||!navigator.onLine) return;
+  await sb.from('diary_entries').update({text}).eq('id',id).eq('user_id',currentUser.id);
+}
+
+// ── RECORDING ──
+function toggleRec(){if(isRec)stopRec();else startRec();}
+
+function startRec(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){showToast('Please use Chrome for voice recording');return;}
+  if(!navigator.onLine){showToast('Voice recording requires internet. Type instead.');return;}
+  transcript='';
+  document.getElementById('placeholder').style.display='none';
+  document.getElementById('live-text').textContent='';
+  document.getElementById('save-btn').disabled=true;
+  document.getElementById('delete-btn').style.display='none';
+  document.getElementById('edit-inline-btn').style.display='none';
+  document.getElementById('word-count').textContent='';
+  isRec=true;secs=0;
+  document.getElementById('mic-ring').classList.add('rec');
+  document.getElementById('mic-btn').classList.add('rec');
+  document.getElementById('mic-btn').textContent='⏹️';
+  document.getElementById('rec-status').textContent='Recording… tap to stop';
+  document.getElementById('rec-timer').classList.add('rec');
+  timerInt=setInterval(function(){secs++;var m=String(Math.floor(secs/60)).padStart(2,'0'),s=String(secs%60).padStart(2,'0');document.getElementById('rec-timer').textContent=m+':'+s;},1000);
+  runSession();
+}
+
+function runSession(){
+  if(!isRec) return;
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  recognition=new SR();
+  recognition.continuous=false;recognition.interimResults=true;
+  recognition.lang=localStorage.getItem('mdd_lang')||'en-ZA';
+  recognition.onresult=function(ev){
+    var interim='';
+    for(var i=0;i<ev.results.length;i++){
+      if(ev.results[i].isFinal)transcript+=ev.results[i][0].transcript+' ';
+      else interim=ev.results[i][0].transcript;
+    }
+    document.getElementById('live-text').textContent=transcript+interim;
+    updateWordCount(transcript+interim,'word-count');
+    var tb=document.getElementById('transcript-box');tb.scrollTop=tb.scrollHeight;
+  };
+  recognition.onerror=function(ev){if(ev.error==='no-speech'||ev.error==='aborted')return;showToast('Mic error: '+ev.error);stopRec();};
+  recognition.onend=function(){if(isRec)setTimeout(runSession,80);};
+  try{recognition.start();}catch(e){}
+}
+
+function stopRec(){
+  isRec=false;
+  if(recognition){try{recognition.onend=null;recognition.stop();}catch(e){}recognition=null;}
+  clearInterval(timerInt);
+  document.getElementById('mic-ring').classList.remove('rec');
+  document.getElementById('mic-btn').classList.remove('rec');
+  document.getElementById('mic-btn').textContent='🎙️';
+  document.getElementById('rec-timer').classList.remove('rec');
+  var t=transcript.trim();
+  if(t){
+    document.getElementById('live-text').textContent=t;
+    document.getElementById('rec-status').textContent='Done! Save or delete this entry.';
+    document.getElementById('save-btn').disabled=false;
+    document.getElementById('delete-btn').style.display='block';
+    document.getElementById('edit-inline-btn').style.display='block';
+    updateWordCount(t,'word-count');
+  } else {
+    document.getElementById('rec-status').textContent='Nothing captured. Try again.';
+    document.getElementById('placeholder').style.display='inline';
+  }
+}
+
+function updateWordCount(text,elId){
+  var words=text.trim().split(/\s+/).filter(function(w){return w.length>0;}).length;
+  var el=document.getElementById(elId);
+  if(el) el.textContent=words>0?words+' words':'';
+}
+
+function toggleMode(){
+  typingMode=!typingMode;
+  if(isRec)stopRec();
+  document.getElementById('mic-area').classList.toggle('hide',typingMode);
+  document.getElementById('type-area').classList.toggle('show',typingMode);
+  document.getElementById('mode-toggle').textContent=typingMode?'🎙️ Use mic instead':'✏️ Type instead';
+  document.getElementById('mic-ring').style.display=typingMode?'none':'flex';
+  document.getElementById('rec-status').style.display=typingMode?'none':'block';
+  document.getElementById('rec-timer').style.display=typingMode?'none':'block';
+  transcript='';document.getElementById('delete-btn').style.display='none';
+  updateSaveAvailability();
+  document.getElementById('edit-inline-btn').style.display='none';
+  if(typingMode){document.getElementById('manual-input').value='';setTimeout(function(){document.getElementById('manual-input').focus();},100);}
+  else{document.getElementById('live-text').textContent='';document.getElementById('placeholder').style.display='inline';}
+}
+
+function onManualType(){
+  var t=document.getElementById('manual-input').value.trim();
+  transcript=t;
+  document.getElementById('save-btn').disabled=(t.length===0 && !hasPendingPhotos());
+  document.getElementById('delete-btn').style.display=t.length>0?'block':'none';
+  updateWordCount(t,'word-count-type');
+}
+
+function checkAppendAvailable(){
+  var entries=getCached();
+  var today=localDateStr(new Date());
+  var hasToday=entries.some(function(e){return e.date===today;});
+  document.getElementById('append-btn').style.display=hasToday?'block':'none';
+}
+
+async function appendToLast(){
+  var t=transcript.trim(); if(!t){showToast('Nothing to append');return;}
+  var entries=getCached();
+  var today=localDateStr(new Date());
+  var last=entries.find(function(e){return e.date===today;});
+  if(!last){showToast('No entry today to append to');return;}
+  last.text=last.text+' '+t;
+  setCached(entries);
+  await updateInCloud(last.id,last.text);
+  discardEntry();
+  showToast('Added to your last entry ✓');
+}
+
+function discardEntry(){
+  transcript='';
+  document.getElementById('live-text').textContent='';
+  document.getElementById('placeholder').style.display='inline';
+  document.getElementById('rec-status').textContent='Tap the mic to start recording';
+  document.getElementById('rec-timer').textContent='00:00';
+  document.getElementById('save-btn').disabled=true;
+  document.getElementById('delete-btn').style.display='none';
+  document.getElementById('edit-inline-btn').style.display='none';
+  document.getElementById('topic-field').value='';
+  document.getElementById('manual-input').value='';
+  document.getElementById('word-count').textContent='';
+  document.getElementById('word-count-type').textContent='';
+  clearPhotos();
+  showToast('Note deleted');
+}
+
+async function saveEntry(){
+  var t=transcript.trim();
+  if(!t && !hasPendingPhotos()) return;
+  var entryAllowed=await canAddEntry();
+  if(!entryAllowed){showToast('Daily entry limit reached (20/day) — try again tomorrow');return;}
+  var now=new Date();
+  var tempId=Date.now();
+  var photosToProcess=pendingPhotos.filter(function(p){return p;});
+
+  // 1) Save the entry itself FIRST, with no photos attached yet, and with no dependency
+  //    on anything photo-related succeeding. The text/voice entry is the priority and must
+  //    never be blocked, delayed, or lost because of a photo upload/queue decision.
+  var entry={
+    id:tempId,
+    date:localDateStr(now),
+    dayName:now.toLocaleDateString('en-ZA',{weekday:'long'}),
+    time:now.toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'}),
+    topic:document.getElementById('topic-field').value.trim(),
+    text:t,
+    photos:[],
+    pendingSync:true
+  };
+  var entries=getCached(); entries.unshift(entry); setCached(entries);
+  await saveToCloud(entry);
+  await incrementEntryCount();
+  clearPhotos();
+  document.getElementById('save-btn').disabled=true;
+  var btn=document.getElementById('save-btn'); btn.textContent='✅ Saved!'; btn.classList.add('saved');
+  setTimeout(function(){
+    btn.textContent='💾 Save to my diary';btn.classList.remove('saved');
+    transcript='';document.getElementById('live-text').textContent='';document.getElementById('placeholder').style.display='inline';
+    document.getElementById('rec-status').textContent='Tap the mic to start recording';document.getElementById('rec-timer').textContent='00:00';
+    document.getElementById('delete-btn').style.display='none';document.getElementById('edit-inline-btn').style.display='none';
+    document.getElementById('topic-field').value='';document.getElementById('manual-input').value='';
+    document.getElementById('word-count').textContent='';document.getElementById('word-count-type').textContent='';
+  },2000);
+  updateStats();updateStreak();checkAppendAvailable();
+  showToast('Entry saved! 📔');
+
+  // 2) AFTER the entry is safely saved, handle photos. Wrapped so that absolutely nothing
+  //    here — a prompt, IndexedDB, an upload failure, anything — can ever undo or block the
+  //    entry that's already saved above. Worst case if this whole block fails: the entry
+  //    saves with no photo, which is recoverable (photo can be added via Edit), versus the
+  //    old risk of losing the entry text itself, which is not recoverable.
+  if(photosToProcess.length>0){
+    try{
+      await handlePhotosAfterEntrySaved(tempId,photosToProcess);
+    }catch(e){
+      showToast('Entry saved, but there was an issue with the photo — you can try adding it again via Edit');
+    }
+  }
+}
+
+async function handlePhotosAfterEntrySaved(entryId,photos){
+  var wifiOnly=isWifiOnlyEnabled();
+  var onWifi=likelyOnWifi();
+  var shouldPromptForData = wifiOnly && onWifi!==true; // prompt unless we're confident it's WiFi
+
+  if(shouldPromptForData){
+    var choice=await showDataChoicePrompt();
+    if(choice==='wait'){
+      for(var i=0;i<photos.length;i++){
+        await queuePhotoForWifi(photos[i].file,entryId);
+      }
+      if(!localStorage.getItem('mdd_last_backup')) localStorage.setItem('mdd_last_backup',Date.now().toString());
+      await updateQueuedPhotoIndicator();
+      showToast('Photo'+(photos.length===1?'':'s')+' saved on your phone — will upload once you\'re on WiFi');
+      return;
+    }
+    // 'mobile' chosen — fall through and upload normally below
+  }
+
+  // Upload immediately (either WiFi-only is off, we're confident we're on WiFi,
+  // or the person explicitly chose to use mobile data)
+  var urls=[];
+  for(var i=0;i<photos.length;i++){
+    var p=photos[i];
+    var ext=p.file.name.split('.').pop()||'jpg';
+    var path=currentUser.id+'/'+entryId+'/'+Date.now()+'_'+i+'.'+ext;
+    var {error}=await sb.storage.from('diary-photos').upload(path,p.file,{contentType:p.file.type});
+    if(!error){
+      var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
+      urls.push(urlData.publicUrl);
+    }
+  }
+  if(urls.length>0){
+    await attachQueuedPhotoUrlsToEntry(entryId,urls);
+    localStorage.setItem('mdd_last_backup',Date.now().toString());
+  }
+  await incrementPhotoCount(photos.length);
+}
+
+async function attachQueuedPhotoUrlsToEntry(entryId,urls){
+  var entries=getCached();
+  var entry=entries.find(function(e){return e.id===entryId;});
+  if(entry){
+    entry.photos=(entry.photos||[]).concat(urls);
+    setCached(entries);
+    await sb.from('diary_entries').update({photos:entry.photos}).eq('id',entryId).eq('user_id',currentUser.id);
+    renderDiary();
+  }
+}
+
+// ── STREAK ──
+function updateStreak(){
+  var entries=getCached();
+  var dates=[...new Set(entries.map(function(e){return e.date;}))].sort(function(a,b){return b.localeCompare(a);});
+  if(!dates.length){document.getElementById('streak-bar').style.display='none';return;}
+  var streak=1,today=new Date();
+  var todayLocal=localDateStr(today);
+  if(dates[0]!==todayLocal){var yest=new Date(today);yest.setDate(yest.getDate()-1);if(dates[0]!==localDateStr(yest)){document.getElementById('streak-bar').style.display='none';return;}}
+  for(var i=1;i<dates.length;i++){
+    var d1=new Date(dates[i-1]),d2=new Date(dates[i]);
+    d1.setHours(12);d2.setHours(12);
+    var diff=(d1-d2)/(1000*60*60*24);
+    if(diff===1)streak++;else break;
+  }
+  if(streak>=2){
+    document.getElementById('streak-bar').style.display='flex';
+    document.getElementById('streak-count').textContent=streak;
+    document.getElementById('streak-title').textContent=streak+' day streak!';
+  } else {
+    document.getElementById('streak-bar').style.display='none';
+  }
+}
+
+// ── EDIT OVERLAY ──
+function openEditOverlay(mode,id){
+  editMode=mode;editEntryId=id||null;
+  var txt=mode==='diary'?getCached().find(function(e){return e.id===id;}).text:transcript.trim();
+  document.getElementById('edit-textarea').value=txt;
+  document.getElementById('edit-overlay').classList.add('show');
+  setTimeout(function(){document.getElementById('edit-textarea').focus();},100);
+}
+function overlayBgClick(e){if(e.target===document.getElementById('edit-overlay'))closeOverlay();}
+function closeOverlay(){document.getElementById('edit-overlay').classList.remove('show');}
+async function confirmEdit(){
+  var t=document.getElementById('edit-textarea').value.trim();if(!t){showToast('Entry cannot be empty.');return;}
+  if(editMode==='diary'){
+    var entries=getCached();var e=entries.find(function(x){return x.id===editEntryId;});
+    if(e){e.text=t;setCached(entries);await updateInCloud(editEntryId,t);renderDiary();}
+    showToast('Entry updated ✏️');
+  } else {transcript=t;document.getElementById('live-text').textContent=t;showToast('Text updated ✏️');}
+  closeOverlay();
+}
+
+// ── DIARY ──
+function showPage(p,btn){
+  document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active');});
+  document.querySelectorAll('.nb').forEach(function(x){x.classList.remove('active');});
+  document.getElementById('page-'+p).classList.add('active');
+  btn.classList.add('active');
+  if(p==='diary')renderDiary();
+  if(p==='export')updateStats();
+  if(p==='settings')loadVoices();
+  if(p==='record') setFreeVersionMode(false); // tapping the real Record tab always restores full (photo) mode
+}
+
+// The Free Version tab reuses the exact same Record page/elements (same IDs) rather than
+// duplicating markup — duplicate IDs in one HTML document would break getElementById lookups
+// throughout the app. Instead, this just hides the photo section and shows an explainer banner.
+function setFreeVersionMode(on){
+  var photoSection=document.getElementById('photo-section');
+  var banner=document.getElementById('free-version-banner');
+  if(photoSection) photoSection.style.display=on?'none':'';
+  if(banner) banner.style.display=on?'block':'none';
+}
+
+function showFreeVersion(btn){
+  document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active');});
+  document.querySelectorAll('.nb').forEach(function(x){x.classList.remove('active');});
+  document.getElementById('page-record').classList.add('active');
+  btn.classList.add('active');
+  setFreeVersionMode(true);
+}
+
+function renderDiary(filter){
+  var entries=getCached(),c=document.getElementById('diary-content');
+  if(filter){
+    var fl=filter.toLowerCase();
+    entries=entries.filter(function(e){return e.text.toLowerCase().includes(fl)||(e.topic&&e.topic.toLowerCase().includes(fl));});
+  }
+  if(!entries.length){
+    c.innerHTML=filter?'<div class="no-results">No entries found for "'+filter+'"</div>':'<div class="empty-diary"><div class="ei">📔</div><h3>Your diary is empty</h3><p>Tap Record and speak your first entry.</p></div>';
+    return;
+  }
+  var g={};entries.forEach(function(e){if(!g[e.date])g[e.date]=[];g[e.date].push(e);});
+  var html='';
+  Object.keys(g).sort(function(a,b){return b.localeCompare(a);}).forEach(function(date){
+    var d=new Date(date+'T12:00:00');
+    html+='<div class="diary-day" id="day-'+date+'"><div class="diary-day-header"><div class="diary-day-name">'+d.toLocaleDateString('en-ZA',{weekday:'long'})+'</div><div class="diary-day-date">'+d.toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'})+'</div></div>';
+    g[date].forEach(function(e){
+      var wc=e.text.trim().split(/\s+/).filter(function(w){return w.length>0;}).length;
+      html+='<div class="diary-entry"><span class="entry-time">🕐 '+e.time+'</span>';
+      if(e.topic)html+='<div class="entry-topic">'+e.topic+'</div>';
+      html+='<div class="entry-text">'+e.text+'</div><div class="entry-wc">'+wc+' words</div>';
+      html+='<div class="entry-photos" id="entry-photos-'+e.id+'">';
+      if(e.photos&&e.photos.length){
+        e.photos.forEach(function(url){html+='<div class="entry-photo" onclick="viewPhoto(&quot;'+url+'&quot;)"><img src="'+url+'" alt="diary photo" loading="lazy"></div>';});
+      }
+      html+='</div>';
+      html+='<div class="entry-actions"><button class="act-btn" onclick="playEntry('+e.id+')">▶ Play</button><button class="act-btn" onclick="openEditOverlay(\'diary\','+e.id+')">✏️ Edit</button><button class="act-btn danger" onclick="delEntry('+e.id+')">🗑 Delete</button></div></div>';
+    });
+    html+='</div>';
+  });
+  c.innerHTML=html;
+  if(curView==='page')renderPageView();
+  renderQueuedPhotoPlaceholders();
+}
+
+async function renderQueuedPhotoPlaceholders(){
+  try{
+    var queued=await getQueuedPhotos();
+    var entries=getCached();
+    var byEntry={};
+    queued.forEach(function(item){
+      if(currentUser&&item.userId&&item.userId!==currentUser.id) return; // safety: only show this account's own queue
+      if(!byEntry[item.entryId]) byEntry[item.entryId]=0;
+      byEntry[item.entryId]++;
+    });
+    entries.forEach(function(e){
+      var el=document.getElementById('entry-photos-'+e.id);
+      if(!el) return; // entry not currently rendered (e.g. filtered out by search) — fine to skip
+      var hasUploaded=e.photos&&e.photos.length>0;
+      var queuedCount=byEntry[e.id]||0;
+      if(!hasUploaded&&!queuedCount){ el.style.display='none'; return; }
+      var slots='';
+      for(var i=0;i<queuedCount;i++){
+        slots+='<div class="entry-photo queued" title="Waiting to upload"><div class="queued-spinner"></div></div>';
+      }
+      if(slots) el.insertAdjacentHTML('beforeend',slots);
+    });
+  }catch(e){ /* non-critical visual enhancement — fail silently rather than disrupt diary rendering */ }
+}
+
+function searchDiary(v){renderDiary(v||null);}
+
+function switchView(v){
+  curView=v;
+  document.getElementById('diary-scroll').style.display=v==='scroll'?'block':'none';
+  document.getElementById('diary-page-view').style.display=v==='page'?'block':'none';
+  document.getElementById('vb-scroll').classList.toggle('active',v==='scroll');
+  document.getElementById('vb-page').classList.toggle('active',v==='page');
+  if(v==='page')renderPageView();
+}
+
+function renderPageView(){
+  var entries=getCached(),g={};
+  entries.forEach(function(e){if(!g[e.date])g[e.date]=[];g[e.date].push(e);});
+  diaryDates=Object.keys(g).sort(function(a,b){return b.localeCompare(a);});
+  var c=document.getElementById('page-container');
+  if(!diaryDates.length){c.innerHTML='<div class="diary-single-page"><div class="empty-diary"><div class="ei">📔</div><h3>No entries yet</h3></div></div>';document.getElementById('page-counter').textContent='';return;}
+  var html='';
+  diaryDates.forEach(function(date){
+    var d=new Date(date+'T12:00:00');
+    html+='<div class="diary-single-page"><div class="diary-day"><div class="diary-day-header"><div class="diary-day-name">'+d.toLocaleDateString('en-ZA',{weekday:'long'})+'</div><div class="diary-day-date">'+d.toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'})+'</div></div>';
+    g[date].forEach(function(e){
+      html+='<div class="diary-entry"><span class="entry-time">🕐 '+e.time+'</span>';
+      if(e.topic)html+='<div class="entry-topic">'+e.topic+'</div>';
+      html+='<div class="entry-text">'+e.text+'</div><div class="entry-actions"><button class="act-btn" onclick="playEntry('+e.id+')">▶ Play</button><button class="act-btn" onclick="openEditOverlay(\'diary\','+e.id+')">✏️ Edit</button><button class="act-btn danger" onclick="delEntry('+e.id+')">🗑 Delete</button></div></div>';
+    });
+    html+='</div></div>';
+  });
+  c.innerHTML=html;updatePageView();
+}
+
+function updatePageView(){
+  document.getElementById('page-container').style.transform='translateX(-'+(curPage*100)+'%)';
+  document.getElementById('page-counter').textContent=(curPage+1)+' / '+diaryDates.length;
+  document.getElementById('prev-btn').disabled=curPage===0;
+  document.getElementById('next-btn').disabled=curPage>=diaryDates.length-1;
+}
+
+function flipPage(d){var n=curPage+d;if(n<0||n>=diaryDates.length)return;curPage=n;updatePageView();}
+
+function jumpToDate(v){
+  if(!v)return;
+  if(curView==='scroll'){var el=document.getElementById('day-'+v);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});else showToast('No entries for that date.');}
+  else{var i=diaryDates.indexOf(v);if(i!==-1){curPage=i;updatePageView();}else showToast('No entries for that date.');}
+}
+
+var touchStartX=0;
+document.addEventListener('DOMContentLoaded',function(){
+  var pv=document.getElementById('diary-page-view');
+  if(pv){
+    pv.addEventListener('touchstart',function(e){touchStartX=e.touches[0].clientX;},{passive:true});
+    pv.addEventListener('touchend',function(e){var d=touchStartX-e.changedTouches[0].clientX;if(Math.abs(d)>50)flipPage(d>0?1:-1);},{passive:true});
+  }
+  var pb=document.getElementById('prev-body');
+  if(pb){
+    pb.addEventListener('touchstart',function(e){touchStartX=e.touches[0].clientX;},{passive:true});
+    pb.addEventListener('touchend',function(e){var d=touchStartX-e.changedTouches[0].clientX;if(Math.abs(d)>40)flipPreview(d>0?1:-1);},{passive:true});
+  }
+});
+
+function playEntry(id){
+  var e=getCached().find(function(x){return x.id===id;});if(!e||!('speechSynthesis' in window)){showToast('Playback not supported');return;}
+  window.speechSynthesis.cancel();
+  var d=new Date(e.date+'T12:00:00');
+  var dayName=d.toLocaleDateString('en-ZA',{weekday:'long'});
+  var dateStr=d.toLocaleDateString('en-ZA',{day:'numeric',month:'long'});
+  var intro=dayName+', '+dateStr+', '+e.time+'. ';
+  if(e.topic) intro+=e.topic+'. ';
+  var utt=new SpeechSynthesisUtterance(intro+e.text);
+  var v=getVoice();if(v)utt.voice=v;else utt.lang='en-ZA';
+  utt.rate=getSpeed();window.speechSynthesis.speak(utt);showToast('Playing entry…');
+}
+
+async function delEntry(id){
+  if(!confirm('Delete this diary entry?'))return;
+  var entries=getCached().filter(function(e){return e.id!==id;});setCached(entries);
+  await deleteFromCloud(id);
+  renderDiary();updateStats();updateStreak();showToast('Entry deleted.');
+}
+
+// ── EXPORT ──
+function updateStats(){
+  var e=getCached();
+  document.getElementById('stat-entries').textContent=e.length;
+  document.getElementById('stat-days').textContent=new Set(e.map(function(x){return x.date;})).size;
+  var priceSpan=document.getElementById('exp-tier1-price');
+  if(priceSpan) priceSpan.textContent=TIER_PRICES.tier1;
+}
+
+function exportText(){
+  var entries=getCached();if(!entries.length){showToast('No entries to export yet.');return;}
+  var txt='MY DIGITAL DIARY\n================\n\n',g={};
+  entries.forEach(function(e){if(!g[e.date])g[e.date]=[];g[e.date].push(e);});
+  Object.keys(g).sort(function(a,b){return b.localeCompare(a);}).forEach(function(date){
+    var d=new Date(date+'T12:00:00');
+    txt+=d.toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).toUpperCase()+'\n'+'----------------------------------------\n';
+    g[date].forEach(function(e){txt+='['+e.time+']'+(e.topic?' '+e.topic.toUpperCase():'')+'\n'+e.text+'\n\n';});
+    txt+='\n';
+  });
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='MyDigitalDiary.txt';a.click();showToast('Diary downloaded!');
+}
+
+function exportJSON(){
+  var entries=getCached();if(!entries.length){showToast('No entries to backup yet.');return;}
+  var data={version:1,exported:new Date().toISOString(),entries};
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download='MyDigitalDiary_backup.json';a.click();showToast('Backup downloaded! Keep it safe 💾');
+}
+
+function importJSON(){document.getElementById('import-file').click();}
+
+function handleImport(input){
+  var file=input.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=JSON.parse(e.target.result);
+      if(!data.entries||!Array.isArray(data.entries)){showToast('Invalid backup file.');return;}
+      var existing=getCached();
+      var merged=existing.slice();
+      var existingIds=new Set(existing.map(function(e){return e.id;}));
+      data.entries.forEach(function(e){if(!existingIds.has(e.id))merged.push(e);});
+      merged.sort(function(a,b){return b.date.localeCompare(a.date);});
+      setCached(merged);
+      updateStats();updateStreak();
+      showToast('Restored '+data.entries.length+' entries ✓');
+    }catch(err){showToast('Could not read backup file.');}
+  };
+  reader.readAsText(file);
+  input.value='';
+}
+
+function toggleCust(){custOpen=!custOpen;document.getElementById('cust-panel').classList.toggle('open',custOpen);document.getElementById('cust-arrow').textContent=custOpen?'⌄':'›';}
+function showSub(t){['name','cover','page'].forEach(function(x){document.getElementById('sc-'+x).classList.toggle('active',x===t);document.getElementById('sc-'+x).style.display=x===t?'block':'none';document.getElementById('st-'+x).classList.toggle('active',x===t);});}
+function selFont(n){selFontN=n;document.querySelectorAll('.font-opt').forEach(function(el){el.classList.toggle('sel',el.dataset.font==n);});}
+function selCover(n){selCoverN=n;document.querySelectorAll('.cover-opt').forEach(function(el){el.classList.toggle('sel',el.dataset.cv==n);});}
+function selLayout(n){selLayoutN=n;document.querySelectorAll('.layout-opt').forEach(function(el){el.classList.toggle('sel',el.dataset.ly==n);});}
+function selSize(s){selSizeS=s;document.getElementById('sz-a4').classList.toggle('sel',s==='A4');document.getElementById('sz-a5').classList.toggle('sel',s==='A5');}
+
+function showPreview(){
+  var name=document.getElementById('cust-name').value.trim()||'My Digital Diary';
+  var year=document.getElementById('cust-year').value||'2026';
+  var entries=getCached();var bg=coverBgs[selCoverN];var tc=coverTxt[selCoverN];
+  var subColor=tc==='white'?'rgba(255,255,255,0.75)':'#888';
+  prevPages=[];
+  prevPages.push('<div class="prev-page-slide"><div class="prev-section-label">COVER</div><div class="prev-cover-card" style="background:'+bg+'"><div style="font-size:22px;font-weight:800;color:'+tc+';">'+name+'</div><div style="font-size:14px;color:'+subColor+';margin-top:8px;">'+year+'</div></div></div>');
+  var pagesHtml='<div class="prev-page-slide"><div class="prev-section-label">PAGES</div>';
+  var g={};entries.forEach(function(e){if(!g[e.date])g[e.date]=[];g[e.date].push(e);});
+  var dates=Object.keys(g).sort(function(a,b){return a.localeCompare(b);});
+  if(!dates.length){pagesHtml+='<div class="prev-diary-page"><div class="prev-diary-date">Your diary entries will appear here, starting January 1st '+year+'</div></div>';}
+  else{
+    dates.slice(0,2).forEach(function(date){
+      var d=new Date(date+'T12:00:00');
+      pagesHtml+='<div class="prev-diary-page"><div class="prev-diary-date">'+d.toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</div>';
+      g[date].forEach(function(e){if(e.topic)pagesHtml+='<div style="font-size:10px;font-weight:700;color:#534AB7;text-transform:uppercase;">'+e.topic+'</div>';pagesHtml+='<div class="prev-entry-time">'+e.time+'</div><div class="prev-entry-text">'+e.text+'</div>';});
+      pagesHtml+='</div>';
+    });
+    if(dates.length>2)pagesHtml+='<p style="text-align:center;font-size:12px;color:#999;margin-top:8px;">+ '+(dates.length-2)+' more days…</p>';
+  }
+  pagesHtml+='</div>';
+  prevPages.push(pagesHtml);
+  prevPages.push('<div class="prev-page-slide"><div class="prev-section-label">BACK COVER</div><div class="prev-back-card" style="background:'+bg+'"><div style="font-size:13px;font-weight:600;color:'+subColor+';">Produced by My Digital Diary</div></div></div>');
+  prevPageIndex=0;
+  var wrap=document.getElementById('prev-pages-wrap');
+  wrap.style.width=(prevPages.length*100)+'%';
+  wrap.innerHTML='';
+  prevPages.forEach(function(html){var div=document.createElement('div');div.style.cssText='min-width:'+(100/prevPages.length)+'%;flex-shrink:0;';div.innerHTML=html;wrap.appendChild(div);});
+  updatePreviewNav();
+  document.getElementById('prev-overlay').classList.add('show');
+}
+
+function updatePreviewNav(){
+  document.getElementById('prev-pages-wrap').style.transform='translateX(-'+(prevPageIndex*(100/prevPages.length))+'%)';
+  var labels=['Cover','Pages','Back cover'];
+  document.getElementById('prev-page-label').textContent=labels[prevPageIndex]||'';
+  document.getElementById('prev-flip-back').style.opacity=prevPageIndex===0?'0.2':'1';
+  document.getElementById('prev-flip-fwd').style.opacity=prevPageIndex>=prevPages.length-1?'0.2':'1';
+}
+
+function flipPreview(dir){var n=prevPageIndex+dir;if(n<0||n>=prevPages.length)return;prevPageIndex=n;updatePreviewNav();}
+function closePreview(){document.getElementById('prev-overlay').classList.remove('show');}
+function initPayment(t){var a=t==='print'?2:3;showToast('Payment coming soon — $'+a+' (PayFast & Stripe)');closePreview();}
+
+// ── SETTINGS ──
+function loadVoices(){
+  voices=window.speechSynthesis.getVoices();var sel=document.getElementById('voice-select');if(!sel||!voices.length)return;
+  var saved=localStorage.getItem('mdd_voice')||'';
+  var eng=voices.filter(function(v){return v.lang.startsWith('en');}),oth=voices.filter(function(v){return !v.lang.startsWith('en');});
+  sel.innerHTML='';eng.concat(oth).forEach(function(v){var o=document.createElement('option');o.value=v.name;o.textContent=v.name+' ('+v.lang+')';if(v.name===saved)o.selected=true;sel.appendChild(o);});
+}
+function saveVoice(){var s=document.getElementById('voice-select');if(s)localStorage.setItem('mdd_voice',s.value);}
+function updateSpeed(){var v=parseFloat(document.getElementById('speed-slider').value).toFixed(2);document.getElementById('speed-val').textContent=v+'x';localStorage.setItem('mdd_spd',v);}
+function getVoice(){var s=localStorage.getItem('mdd_voice')||'';return s?voices.find(function(v){return v.name===s;})||null:null;}
+function getSpeed(){return parseFloat(localStorage.getItem('mdd_spd')||'0.95');}
+function testVoice(){window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance('Hi, this is how your diary will sound when played back.');var v=getVoice();if(v)u.voice=v;u.rate=getSpeed();window.speechSynthesis.speak(u);}
+function saveLang(){var s=document.getElementById('lang-select');if(s)localStorage.setItem('mdd_lang',s.value);}
+
+// ── WIFI-ONLY PHOTO QUEUE SYSTEM ──
+// Uses IndexedDB (not localStorage) since photo blobs are too large/binary for localStorage's
+// small text-only quota. This lets photos be queued on-device when the user opts to wait for
+// WiFi, then auto-uploaded once a good connection is detected.
+
+var WIFI_DB_NAME='mdd_photo_queue', WIFI_DB_VERSION=1, WIFI_STORE='queued_photos';
+var wifiDb=null;
+
+function openWifiQueueDB(){
+  return new Promise(function(resolve,reject){
+    if(wifiDb){resolve(wifiDb);return;}
+    var req=indexedDB.open(WIFI_DB_NAME,WIFI_DB_VERSION);
+    req.onupgradeneeded=function(e){
+      var db=e.target.result;
+      if(!db.objectStoreNames.contains(WIFI_STORE)){
+        db.createObjectStore(WIFI_STORE,{keyPath:'id',autoIncrement:true});
+      }
+    };
+    req.onsuccess=function(e){wifiDb=e.target.result;resolve(wifiDb);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+
+async function queuePhotoForWifi(file,entryId){
+  var db=await openWifiQueueDB();
+  return new Promise(function(resolve,reject){
+    var tx=db.transaction(WIFI_STORE,'readwrite');
+    var store=tx.objectStore(WIFI_STORE);
+    var record={file:file,entryId:entryId,queuedAt:Date.now(),userId:currentUser?currentUser.id:null};
+    var req=store.add(record);
+    req.onsuccess=function(){resolve(req.result);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+
+async function getQueuedPhotos(){
+  var db=await openWifiQueueDB();
+  return new Promise(function(resolve,reject){
+    var tx=db.transaction(WIFI_STORE,'readonly');
+    var store=tx.objectStore(WIFI_STORE);
+    var req=store.getAll();
+    req.onsuccess=function(){resolve(req.result||[]);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+
+async function deleteQueuedPhoto(id){
+  var db=await openWifiQueueDB();
+  return new Promise(function(resolve,reject){
+    var tx=db.transaction(WIFI_STORE,'readwrite');
+    var store=tx.objectStore(WIFI_STORE);
+    var req=store.delete(id);
+    req.onsuccess=function(){resolve();};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+
+function isWifiOnlyEnabled(){
+  return localStorage.getItem('mdd_wifi_only')==='1';
+}
+
+function saveWifiOnlyPref(){
+  var checked=document.getElementById('wifi-only-toggle').checked;
+  localStorage.setItem('mdd_wifi_only',checked?'1':'0');
+  showToast(checked?'Photos will only upload on WiFi':'Photos will upload on any connection');
+}
+
+function loadWifiOnlyPref(){
+  var el=document.getElementById('wifi-only-toggle');
+  if(el) el.checked=isWifiOnlyEnabled();
+}
+
+// Best-effort connection guess. navigator.connection is not supported on iOS Safari at all,
+// and even where supported, browsers don't always know for certain. Treated as a hint only —
+// the user always gets the final say via the prompt, never a silent decision.
+function likelyOnWifi(){
+  if(!navigator.onLine) return false;
+  var conn=navigator.connection||navigator.webkitConnection||navigator.mozConnection;
+  if(!conn) return null; // unknown — can't tell on this browser (e.g. iOS Safari)
+  if(conn.type) return conn.type==='wifi'||conn.type==='ethernet';
+  if(conn.effectiveType) return conn.effectiveType==='4g'; // rough heuristic only
+  return null;
+}
+
+function showDataChoicePrompt(){
+  return new Promise(function(resolve){
+    var existing=document.getElementById('data-choice-modal');
+    if(existing) existing.remove();
+    var modal=document.createElement('div');
+    modal.id='data-choice-modal';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+    modal.innerHTML=
+      '<div style="background:#fff;border-radius:18px;max-width:380px;width:100%;padding:24px;">'+
+        '<h3 style="margin:0 0 8px;color:#534AB7;">📶 Not on WiFi</h3>'+
+        '<p style="font-size:14px;color:#555;margin:0 0 16px;">You\'ve chosen to only upload photos on WiFi, and it looks like you might be on mobile data right now. What would you like to do with this photo?</p>'+
+        '<button id="dc-mobile-btn" style="width:100%;padding:12px;margin-bottom:8px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Upload now using mobile data</button>'+
+        '<button id="dc-wait-btn" style="width:100%;padding:12px;background:#F4F3F8;color:#534AB7;border:none;border-radius:12px;font-weight:600;">Wait for WiFi (24 hours max)</button>'+
+        '<p style="font-size:12px;color:#999;margin:12px 0 0;text-align:center;">If WiFi isn\'t found within 24 hours, we\'ll automatically back it up using mobile data instead — your photo is never left unprotected for long.</p>'+
+      '</div>';
+    document.body.appendChild(modal);
+    document.getElementById('dc-mobile-btn').onclick=function(){modal.remove();resolve('mobile');};
+    document.getElementById('dc-wait-btn').onclick=function(){modal.remove();resolve('wait');};
+  });
+}
+
+async function updateQueuedPhotoIndicator(){
+  var queued=await getQueuedPhotos();
+  var el=document.getElementById('queued-photo-indicator');
+  if(!el) return;
+  if(queued.length>0){
+    el.style.display='block';
+    el.textContent='📷 '+queued.length+' photo'+(queued.length===1?'':'s')+' waiting for WiFi';
+  } else {
+    el.style.display='none';
+  }
+}
+
+var QUEUE_FORCE_UPLOAD_MS = 24*60*60*1000; // 24 hours — after this, upload regardless of connection type, never leave a photo unprotected longer than this
+
+async function processWifiQueue(){
+  if(!navigator.onLine||!currentUser) return; // can't upload at all while fully offline, regardless of how old the queue item is
+  var onWifi=likelyOnWifi();
+  var queued=await getQueuedPhotos();
+  if(!queued.length) return;
+  var now=Date.now();
+  var forcedCount=0;
+  for(var i=0;i<queued.length;i++){
+    var item=queued[i];
+    if(item.userId&&item.userId!==currentUser.id) continue; // safety: don't upload another account's queued photo
+    var ageMs=now-item.queuedAt;
+    var pastDeadline=ageMs>=QUEUE_FORCE_UPLOAD_MS;
+    // Upload if: we're confidently on WiFi, OR connection type is unknown (e.g. iOS) and we're online,
+    // OR the 24-hour deadline has passed (force upload on any connection — guarantee, not optional).
+    var shouldUploadNow = (onWifi===true) || (onWifi===null) || pastDeadline;
+    if(!shouldUploadNow) continue; // confidently on mobile data and still within the 24-hour grace window — wait
+    try{
+      var ext=item.file.name.split('.').pop()||'jpg';
+      var path=currentUser.id+'/'+item.entryId+'/'+Date.now()+'_q'+item.id+'.'+ext;
+      var {error}=await sb.storage.from('diary-photos').upload(path,item.file,{contentType:item.file.type});
+      if(!error){
+        var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
+        await attachQueuedPhotoUrlToEntry(item.entryId,urlData.publicUrl);
+        await deleteQueuedPhoto(item.id);
+        await incrementPhotoCount(1);
+        localStorage.setItem('mdd_last_backup',Date.now().toString());
+        if(pastDeadline&&onWifi===false) forcedCount++;
+      }
+    }catch(e){ /* leave in queue, will retry next cycle */ }
+  }
+  await updateQueuedPhotoIndicator();
+  if(forcedCount>0){
+    showMobileDataBackupNotice(forcedCount);
+  }
+}
+
+function showMobileDataBackupNotice(count){
+  var existing=document.getElementById('mobile-backup-modal');
+  if(existing) existing.remove();
+  var modal=document.createElement('div');
+  modal.id='mobile-backup-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  modal.innerHTML=
+    '<div style="background:#fff;border-radius:18px;max-width:380px;width:100%;padding:24px;">'+
+      '<h3 style="margin:0 0 8px;color:#534AB7;">📶 Backing up using mobile data</h3>'+
+      '<p style="font-size:14px;color:#555;margin:0 0 16px;">'+count+' photo'+(count===1?' has been waiting':'s have been waiting')+' for WiFi for 24 hours, so to keep '+(count===1?'it':'them')+' safe we\'ve gone ahead and backed '+(count===1?'it':'them')+' up using your mobile data.</p>'+
+      '<button id="mb-ok-btn" style="width:100%;padding:12px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Got it</button>'+
+    '</div>';
+  document.body.appendChild(modal);
+  document.getElementById('mb-ok-btn').onclick=function(){modal.remove();};
+}
+
+async function attachQueuedPhotoUrlToEntry(entryId,url){
+  return attachQueuedPhotoUrlsToEntry(entryId,[url]);
+}
+
+function checkBackupAge(){
+  getQueuedPhotos().then(function(q){
+    if(!q.length) return; // nothing queued, no need to warn
+    var now=Date.now();
+    var oldest=Math.min.apply(null,q.map(function(item){return item.queuedAt;}));
+    var hoursSince=(now-oldest)/(1000*60*60);
+    // Photos past the 24-hour mark should already be force-uploaded by processWifiQueue whenever
+    // the device has ANY connection. The only way a photo is STILL queued past 24 hours is if the
+    // device has had no internet connection at all (not even mobile data) since it was queued —
+    // that's the one case truly outside the guarantee, and it's honest to say so rather than promise
+    // something that can't happen without any connection at all.
+    if(hoursSince>=24 && !navigator.onLine){
+      showBackupWarning(q.length,hoursSince>=48);
+    }
+  });
+}
+
+function showBackupWarning(count,noConnectionAtAll){
+  var existing=document.getElementById('backup-warn-modal');
+  if(existing) existing.remove();
+  var modal=document.createElement('div');
+  modal.id='backup-warn-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  var body=noConnectionAtAll
+    ? 'Your device has had no internet connection at all for a while, so '+(count===1?'this photo hasn\'t':'these photos haven\'t')+' been able to upload yet — not even on mobile data. As soon as you have any connection, it will upload automatically.'
+    : 'Your device appears to have no connection right now, so '+(count===1?'this photo is':'these photos are')+' waiting to upload. As soon as you\'re back online, this happens automatically — no action needed.';
+  modal.innerHTML=
+    '<div style="background:#fff;border-radius:18px;max-width:380px;width:100%;padding:24px;">'+
+      '<h3 style="margin:0 0 8px;color:#534AB7;">📷 '+count+' photo'+(count===1?'':'s')+' waiting to upload</h3>'+
+      '<p style="font-size:14px;color:#555;margin:0 0 16px;">'+body+'</p>'+
+      '<button id="bw-ok-btn" style="width:100%;padding:12px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Got it</button>'+
+    '</div>';
+  document.body.appendChild(modal);
+  document.getElementById('bw-ok-btn').onclick=function(){modal.remove();};
+}
+
+// ── PHOTOS ──
+var pendingPhotos = []; // {file, localUrl, cloudPath}
+
+async function addPhoto(){
+  var grid=document.getElementById('photo-grid');
+  var count=grid.querySelectorAll('.photo-thumb').length;
+  if(count>=10){showToast('Maximum 10 photos per entry');return;}
+  var allowed=await canAddPhoto();
+  if(!allowed){showUpgradeModal('limit');return;}
+  document.getElementById('photo-input').click();
+}
+
+async function takePhoto(){
+  var grid=document.getElementById('photo-grid');
+  var count=grid.querySelectorAll('.photo-thumb').length;
+  if(count>=10){showToast('Maximum 10 photos per entry');return;}
+  var allowed=await canAddPhoto();
+  if(!allowed){showUpgradeModal('limit');return;}
+  document.getElementById('photo-camera-input').click();
+}
+
+function compressImage(file){
+  return new Promise(function(resolve){
+    var maxDim=1600; // long edge cap in pixels — good for phone/screen viewing
+    var quality=0.75; // quality, 0–1 (applies to both WebP and the JPEG fallback)
+    // TODO (print-ready PDF feature, not yet built): when generating the $2 print-ready PDF export,
+    // consider re-compressing at a higher quality/larger maxDim (e.g. maxDim=2400-3000, quality=0.85-0.9)
+    // specifically for that export path, since print needs more detail than on-screen viewing.
+    // Everyday diary photos should stay compressed small as they are now — only the PDF export path
+    // should use higher quality, and only at export time, not on upload.
+    var img=new Image();
+    var reader=new FileReader();
+    reader.onload=function(e){
+      img.onload=function(){
+        var w=img.width,h=img.height;
+        if(w>maxDim||h>maxDim){
+          if(w>h){h=Math.round(h*(maxDim/w));w=maxDim;}
+          else{w=Math.round(w*(maxDim/h));h=maxDim;}
+        }
+        var canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        var ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,w,h);
+
+        function finishAsJpeg(){
+          // Proven, safe fallback for any browser that doesn't genuinely support WebP encoding.
+          canvas.toBlob(function(blob){
+            if(!blob){resolve(file);return;} // fallback to original if compression fails entirely
+            var newName=file.name.replace(/\.[^.]+$/,'')+'.jpg';
+            resolve(new File([blob],newName,{type:'image/jpeg'}));
+          },'image/jpeg',quality);
+        }
+
+        // Try WebP first — typically meaningfully smaller than JPEG at equivalent visual quality,
+        // which directly reduces ongoing photo storage costs. IMPORTANT: canvas.toBlob silently
+        // substitutes PNG (not an error) if a browser doesn't actually support the requested type,
+        // and PNG is usually LARGER than our current JPEG — so the blob's real resulting .type is
+        // checked explicitly rather than trusted, and falls back to the safe JPEG path if the
+        // browser didn't genuinely produce WebP.
+        canvas.toBlob(function(blob){
+          if(blob && blob.type==='image/webp'){
+            var newName=file.name.replace(/\.[^.]+$/,'')+'.webp';
+            resolve(new File([blob],newName,{type:'image/webp'}));
+          } else {
+            finishAsJpeg();
+          }
+        },'image/webp',quality);
+      };
+      img.onerror=function(){resolve(file);}; // fallback to original if image fails to load
+      img.src=e.target.result;
+    };
+    reader.onerror=function(){resolve(file);};
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handlePhotoSelect(input){
+  var files=Array.from(input.files);
+  var grid=document.getElementById('photo-grid');
+  var current=grid.querySelectorAll('.photo-thumb').length;
+  var canAdd=10-current;
+  files=files.slice(0,canAdd);
+
+  // Also cap to the remaining daily tier allowance — a user could select multiple
+  // files at once (gallery picker supports multi-select), so re-check here too,
+  // not just at the button-tap stage.
+  await resetCountersIfNewDay();
+  var limit=currentPhotoLimit();
+  var pendingCount=pendingPhotos.filter(function(p){return p;}).length;
+  var remainingToday=limit-userTier.photos_today-pendingCount;
+  var hitDailyLimit=false;
+  if(remainingToday<=0){
+    input.value='';
+    showUpgradeModal('limit');
+    return;
+  }
+  if(files.length>remainingToday){
+    files=files.slice(0,remainingToday);
+    hitDailyLimit=true;
+  }
+
+  for(var i=0;i<files.length;i++){
+    var originalFile=files[i];
+    var file=await compressImage(originalFile);
+    var url=URL.createObjectURL(file);
+    var idx=pendingPhotos.length;
+    pendingPhotos.push({file:file,localUrl:url,cloudPath:null});
+    var div=document.createElement('div');
+    div.className='photo-thumb';
+    div.id='photo-thumb-'+idx;
+    div.innerHTML='<img src="'+url+'" alt="photo"><button class="photo-remove" onclick="removePhoto('+idx+')">✕</button>';
+    grid.appendChild(div);
+  }
+  input.value='';
+  updateSaveAvailability();
+  if(hitDailyLimit) showUpgradeModal('limit');
+}
+
+function removePhoto(idx){
+  pendingPhotos[idx]=null;
+  var el=document.getElementById('photo-thumb-'+idx);
+  if(el) el.remove();
+  updateSaveAvailability();
+}
+
+function hasPendingPhotos(){
+  return pendingPhotos.some(function(p){return p!==null && p!==undefined;});
+}
+
+function updateSaveAvailability(){
+  var t=transcript.trim();
+  document.getElementById('save-btn').disabled = (t.length===0 && !hasPendingPhotos());
+}
+
+async function uploadPhotos(entryId){
+  if(!currentUser||!pendingPhotos.length) return [];
+  var urls=[];
+  for(var i=0;i<pendingPhotos.length;i++){
+    var p=pendingPhotos[i];
+    if(!p) continue;
+    var ext=p.file.name.split('.').pop()||'jpg';
+    var path=currentUser.id+'/'+entryId+'/'+Date.now()+'_'+i+'.'+ext;
+    var thumb=document.getElementById('photo-thumb-'+i);
+    if(thumb){var ov=document.createElement('div');ov.className='photo-uploading';ov.textContent='Uploading…';thumb.appendChild(ov);}
+    var {data,error}=await sb.storage.from('diary-photos').upload(path,p.file,{contentType:p.file.type});
+    if(!error){
+      var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
+      urls.push(urlData.publicUrl);
+    }
+    if(thumb){var ov2=thumb.querySelector('.photo-uploading');if(ov2)ov2.remove();}
+  }
+  return urls;
+}
+
+function clearPhotos(){
+  pendingPhotos=[];
+  document.getElementById('photo-grid').innerHTML='';
+}
+
+// ── TIER / PHOTO LIMIT SYSTEM ──
+var userTier={
+  photo_tier:'free',
+  photos_today:0,
+  photos_today_date:null,
+  entries_today:0,
+  entries_today_date:null,
+  created_at:null
+};
+
+var TIER_LIMITS={ free:2, tier1:3, tier2:6, tier3:10 };
+var TIER_PRICES={ tier1:'$1.99/mo', tier2:'$3.99/mo', tier3:'$5.99/mo' };
+// ZAR amounts for PayFast, which only processes Rand. Rounded to clean numbers rather than
+// chasing exact USD-to-ZAR conversion to the cent, since exchange rates fluctuate daily —
+// these are independent, fixed prices, not a live currency conversion.
+var TIER_PRICES_ZAR={ tier1:32, tier2:65, tier3:97 };
+var ENTRY_DAILY_CAP=20;
+var FREE_TRIAL_DAYS=7;
+
+function todayStr(){ return localDateStr(new Date()); }
+
+// Returns YYYY-MM-DD in the user's LOCAL timezone, not UTC. Date.toISOString() always returns
+// UTC, which caused daily resets/entry dates to roll over at UTC midnight (e.g. 2am in South
+// Africa) instead of the user's actual local midnight — this fixes that across the whole app.
+function localDateStr(d){
+  var year=d.getFullYear();
+  var month=String(d.getMonth()+1).padStart(2,'0');
+  var day=String(d.getDate()).padStart(2,'0');
+  return year+'-'+month+'-'+day;
+}
+
+async function loadUserTier(){
+  if(!currentUser) return;
+  var {data,error}=await sb.from('profiles').select('photo_tier,photos_today,photos_today_date,entries_today,entries_today_date,created_at').eq('id',currentUser.id).single();
+  if(error||!data) return; // fail silently — don't block app usage if this lookup fails
+  userTier.photo_tier=data.photo_tier||'free';
+  userTier.photos_today=data.photos_today||0;
+  userTier.photos_today_date=data.photos_today_date;
+  userTier.entries_today=data.entries_today||0;
+  userTier.entries_today_date=data.entries_today_date;
+  userTier.created_at=data.created_at;
+  await resetCountersIfNewDay();
+}
+
+async function resetCountersIfNewDay(){
+  var today=todayStr();
+  var needsUpdate=false;
+  var updates={};
+  if(userTier.photos_today_date!==today){
+    userTier.photos_today=0; userTier.photos_today_date=today;
+    updates.photos_today=0; updates.photos_today_date=today; needsUpdate=true;
+  }
+  if(userTier.entries_today_date!==today){
+    userTier.entries_today=0; userTier.entries_today_date=today;
+    updates.entries_today=0; updates.entries_today_date=today; needsUpdate=true;
+  }
+  if(needsUpdate&&currentUser){
+    await sb.from('profiles').update(updates).eq('id',currentUser.id);
+  }
+}
+
+function isInFreeTrial(){
+  if(!userTier.created_at) return false;
+  var created=new Date(userTier.created_at);
+  var daysSince=(Date.now()-created.getTime())/(1000*60*60*24);
+  return daysSince<FREE_TRIAL_DAYS;
+}
+
+function currentPhotoLimit(){
+  // Paid tiers always get their purchased allowance, regardless of account age.
+  if(userTier.photo_tier && userTier.photo_tier!=='free') return TIER_LIMITS[userTier.photo_tier]||0;
+  // Free-tier users get the free photo allowance ONLY during the 7-day trial window —
+  // after that, free accounts drop to 0 photos/day (voice & typed entries remain unlimited).
+  // This is a deliberate cost control: unlimited indefinite free photo storage for every
+  // signup would be an unbounded, ever-growing cost as the user base grows.
+  if(isInFreeTrial()) return TIER_LIMITS.free;
+  return 0;
+}
+
+async function canAddPhoto(){
+  await resetCountersIfNewDay();
+  var limit=currentPhotoLimit();
+  var wouldBe=userTier.photos_today+pendingPhotos.filter(function(p){return p;}).length+1;
+  return wouldBe<=limit;
+}
+
+async function canAddEntry(){
+  await resetCountersIfNewDay();
+  return userTier.entries_today<ENTRY_DAILY_CAP;
+}
+
+async function incrementPhotoCount(n){
+  if(!currentUser) return;
+  userTier.photos_today+=n;
+  await sb.from('profiles').update({photos_today:userTier.photos_today,photos_today_date:userTier.photos_today_date}).eq('id',currentUser.id);
+}
+
+async function incrementEntryCount(){
+  if(!currentUser) return;
+  userTier.entries_today+=1;
+  await sb.from('profiles').update({entries_today:userTier.entries_today,entries_today_date:userTier.entries_today_date}).eq('id',currentUser.id);
+}
+
+function showUpgradeModal(reason){
+  var existing=document.getElementById('upgrade-modal');
+  if(existing) existing.remove();
+  var limit=currentPhotoLimit();
+  var trialActive=isInFreeTrial();
+  var modal=document.createElement('div');
+  modal.id='upgrade-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+  // Wording differs depending on how someone got here AND whether their free trial is still
+  // active — a 7-day-old free account legitimately has a 0 photo limit, which needs its own
+  // explanation distinct from "you used today's allowance" or "here's what's on offer."
+  var heading, intro;
+  if(limit===0 && !trialActive && (!userTier.photo_tier || userTier.photo_tier==='free')){
+    heading='📸 Your free photo trial has ended';
+    intro='Your first 7 days included 2 free photos per day to try things out. Voice and typed diary entries remain completely unlimited, always — to keep adding photos, choose a plan below.';
+  } else if(reason==='limit'){
+    heading='📸 Photo limit reached';
+    intro='You\'ve used your '+limit+' free photo'+(limit===1?'':'s')+' for today. Your diary entries (voice or typed) are always unlimited — this limit is just for photos.';
+  } else {
+    heading='📸 Add more photos each day';
+    intro='Your free plan includes '+limit+' photo'+(limit===1?'':'s')+' per day, with unlimited voice and typed diary entries always. Upgrade any time to add more photos each day.';
+  }
+  modal.innerHTML=
+    '<div style="background:#fff;border-radius:18px;max-width:400px;width:100%;padding:24px;max-height:85vh;overflow-y:auto;">'+
+      '<h3 style="margin:0 0 8px;color:#534AB7;">'+heading+'</h3>'+
+      '<p style="font-size:14px;color:#555;margin:0 0 16px;">'+intro+'</p>'+
+      '<p style="font-size:13px;color:#777;margin:0 0 16px;">Storing and serving photos costs us real money as our user base grows, so we keep a small free daily allowance and offer paid tiers for people who want to add more photos each day.</p>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px;">'+
+        '<tr style="border-bottom:1px solid #eee;"><th style="text-align:left;padding:6px 4px;">Plan</th><th style="text-align:left;padding:6px 4px;">Photos/day</th><th style="text-align:left;padding:6px 4px;">Price</th></tr>'+
+        '<tr style="border-bottom:1px solid #f3f3f3;"><td style="padding:6px 4px;">Free</td><td style="padding:6px 4px;">2 (first 7 days), then text/voice only</td><td style="padding:6px 4px;">$0</td></tr>'+
+        '<tr style="border-bottom:1px solid #f3f3f3;"><td style="padding:6px 4px;">Tier 1</td><td style="padding:6px 4px;">3</td><td style="padding:6px 4px;">'+TIER_PRICES.tier1+'</td></tr>'+
+        '<tr style="border-bottom:1px solid #f3f3f3;"><td style="padding:6px 4px;">Tier 2</td><td style="padding:6px 4px;">6</td><td style="padding:6px 4px;">'+TIER_PRICES.tier2+'</td></tr>'+
+        '<tr><td style="padding:6px 4px;">Tier 3</td><td style="padding:6px 4px;">10 (max)</td><td style="padding:6px 4px;">'+TIER_PRICES.tier3+'</td></tr>'+
+      '</table>'+
+      '<button onclick="selectUpgradeTier(\'tier1\')" style="width:100%;padding:12px;margin-bottom:8px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Upgrade to Tier 1 — '+TIER_PRICES.tier1+'</button>'+
+      '<button onclick="selectUpgradeTier(\'tier2\')" style="width:100%;padding:12px;margin-bottom:8px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Upgrade to Tier 2 — '+TIER_PRICES.tier2+'</button>'+
+      '<button onclick="selectUpgradeTier(\'tier3\')" style="width:100%;padding:12px;margin-bottom:8px;background:#534AB7;color:#fff;border:none;border-radius:12px;font-weight:600;">Upgrade to Tier 3 — '+TIER_PRICES.tier3+'</button>'+
+      '<button onclick="closeUpgradeModal()" style="width:100%;padding:12px;background:none;color:#888;border:none;">Maybe later</button>'+
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+function closeUpgradeModal(){
+  var m=document.getElementById('upgrade-modal');
+  if(m) m.remove();
+}
+
+function selectUpgradeTier(tier){
+  if(!currentUser){ showToast('Please sign in again to upgrade'); return; }
+  var amountZar=TIER_PRICES_ZAR[tier];
+  if(!amountZar){ showToast('Unknown plan selected'); return; }
+
+  closeUpgradeModal();
+  showToast('Redirecting to PayFast…');
+
+  // Step 1: create a pending_payments row first. The Edge Function will only ever trust
+  // an amount/tier that WE recorded here ahead of time — never anything the redirect or
+  // ITN claims on its own. This row's id becomes PayFast's m_payment_id reference.
+  sb.from('pending_payments').insert({
+    user_id: currentUser.id,
+    tier: tier,
+    amount_zar: amountZar,
+    status: 'pending'
+  }).select().single().then(function(res){
+    if(res.error || !res.data){
+      console.error('Failed to create pending payment', res.error);
+      showToast('Could not start checkout — please try again');
+      return;
+    }
+    redirectToPayfast(res.data.id, tier, amountZar);
+  });
+}
+
+function redirectToPayfast(paymentId, tier, amountZar){
+  // Andrew's OWN PayFast Sandbox account credentials (created automatically when he first
+  // logged into sandbox.payfast.co.za). NOT the generic 10000100 example credentials shown
+  // in PayFast's public documentation — those are just a shared illustration used in docs,
+  // not a real account anyone can actually log into and check. Using the generic ones meant
+  // test payments processed fine (sandbox accepts any merchant_id format-wise) but nothing
+  // ever showed up in Andrew's own dashboard or ITN history, since they belonged to no one.
+  // These will be swapped again for Andrew's real LIVE merchant_id/key once he has a South
+  // African business bank account and a live (non-sandbox) PayFast account.
+  var merchantId='10050460';
+  var merchantKey='kc6xr3hdsrwx6';
+  var passphrase='Yvonne010101';
+  var payfastHost='sandbox.payfast.co.za'; // sandbox for now; becomes www.payfast.co.za for real payments
+
+  var appUrl='https://verkerkand-cyber.github.io/my-digital-diary/';
+  var notifyUrl='https://fzehrjppccsuiqtxbzeo.supabase.co/functions/v1/payfast-itn';
+
+  var nameParts=(currentUser.email||'Diary User').split('@');
+  var displayName=nameParts[0]||'Diary User';
+
+  // CRITICAL: this exact field order is REQUIRED by PayFast for the checkout signature —
+  // it is NOT alphabetical (that's only for the separate ITN/API signature format). Getting
+  // this order wrong is one of the most common causes of a PayFast signature mismatch.
+  var fields=[
+    ['merchant_id', merchantId],
+    ['merchant_key', merchantKey],
+    ['return_url', appUrl],
+    ['cancel_url', appUrl],
+    ['notify_url', notifyUrl],
+    ['name_first', displayName],
+    ['email_address', currentUser.email||''],
+    ['m_payment_id', paymentId],
+    ['amount', amountZar.toFixed(2)],
+    ['item_name', 'My Digital Diary - '+tier],
+    ['item_description', 'Photo upgrade subscription']
+  ];
+
+  // Build the signature exactly the way PayFast requires: URL-encoded values (spaces as '+'),
+  // joined with '&', passphrase appended at the end, then MD5 hashed. Skips any blank fields,
+  // since PayFast's own docs say blank/empty fields should not be included in the signature.
+  var parts=[];
+  for(var i=0;i<fields.length;i++){
+    var key=fields[i][0], val=fields[i][1];
+    if(val===''||val===null||val===undefined) continue;
+    parts.push(key+'='+encodeURIComponent(val).replace(/%20/g,'+'));
+  }
+  var paramString=parts.join('&')+'&passphrase='+encodeURIComponent(passphrase).replace(/%20/g,'+');
+  var signature=md5(paramString);
+
+  // Build and auto-submit a hidden form — the standard PayFast browser-checkout pattern.
+  // A real form POST (not a GET redirect) is used since PayFast expects this and some
+  // fields could exceed safe URL length limits.
+  var form=document.createElement('form');
+  form.method='POST';
+  form.action='https://'+payfastHost+'/eng/process';
+  form.style.display='none';
+
+  for(var i=0;i<fields.length;i++){
+    var key=fields[i][0], val=fields[i][1];
+    if(val===''||val===null||val===undefined) continue;
+    var input=document.createElement('input');
+    input.type='hidden';
+    input.name=key;
+    input.value=val;
+    form.appendChild(input);
+  }
+  var sigInput=document.createElement('input');
+  sigInput.type='hidden';
+  sigInput.name='signature';
+  sigInput.value=signature;
+  form.appendChild(sigInput);
+
+  // TEMPORARY DEBUG LOGGING — helps diagnose the persistent 400 error by showing exactly
+  // what's being sent. Safe to leave in during testing; remove once checkout works reliably.
+  console.log('=== PayFast Debug Info ===');
+  console.log('Param string used for signature:', paramString);
+  console.log('Computed signature:', signature);
+  console.log('Fields being submitted:', fields);
+
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function viewPhoto(url){
+  document.getElementById('photo-viewer-img').src=url;
+  document.getElementById('photo-viewer').classList.add('show');
+}
+
+function closePhotoViewer(){
+  document.getElementById('photo-viewer').classList.remove('show');
+  document.getElementById('photo-viewer-img').src='';
+}
+
+function openSupport(){
+  var email='verkerkand@gmail.com';
+  var subject=encodeURIComponent('My Digital Diary — Support Request');
+  var body=encodeURIComponent('Hi,\n\nI need help with the following:\n\n[Describe your issue here]\n\nMy account email: '+(currentUser?currentUser.email:''));
+  window.location.href='mailto:'+email+'?subject='+subject+'&body='+body;
+}
+
+function replayIntro(){
+  localStorage.removeItem('mdd_ob_done');
+  document.getElementById('app-screen').style.display='none';
+  showOnboarding();
+}
+
+function showToast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);}
+
+init();
+</script>
+</body>
+</html>
