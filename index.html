@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="My Digital Diary">
-<title>My Digital Diary</title>
+<meta name="apple-mobile-web-app-title" content="My Digital Journal">
+<title>My Digital Journal</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" defer></script>
@@ -315,7 +315,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 <!-- PIN LOCK SCREEN -->
 <div id="pin-screen">
-  <h2>🔒 My Digital Diary</h2>
+  <h2>🔒 MY DIGITAL JOURNAL</h2>
   <p>Enter your PIN to unlock</p>
   <div class="pin-display">
     <div class="pin-dot" id="pd1"></div>
@@ -343,8 +343,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 <!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-top">
-    <h1>📔 My Digital Diary</h1>
-    <p>Your personal voice diary, always with you</p>
+    <h1>📔 MY DIGITAL JOURNAL</h1>
+    <p>Your personal voice journal, always with you</p>
   </div>
   <div class="auth-card">
     <div class="auth-tabs">
@@ -400,13 +400,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     </div>
     <div class="ob-slide">
       <div class="ob-icon">📖</div>
-      <div class="ob-title">Your diary, organised</div>
+      <div class="ob-title">Your journal, organised</div>
       <div class="ob-text">Every entry is saved by date and time. Flip through pages or jump to any day instantly.</div>
     </div>
     <div class="ob-slide">
       <div class="ob-icon">☁️</div>
       <div class="ob-title">Safe in the cloud</div>
-      <div class="ob-text">Your diary is saved to your account. Switch devices anytime — your entries are always there.</div>
+      <div class="ob-text">Your journal is saved to your account. Switch devices anytime — your entries are always there.</div>
     </div>
   </div></div>
   <div class="ob-dots" id="ob-dots">
@@ -423,7 +423,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <div class="offline-banner" id="offline-banner">⚠️ You're offline — voice recording unavailable. You can still type entries.</div>
   <div class="topbar">
     <div>
-      <h1>My Digital Diary</h1>
+      <h1>MY DIGITAL JOURNAL</h1>
       <p id="topbar-date"></p>
     </div>
     <div class="topbar-right">
@@ -434,7 +434,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   <div class="nav">
     <button class="nb active" onclick="showPage('record',this)"><span>🎙️</span>Record</button>
     <button class="nb" onclick="showFreeVersion(this)"><span>🎁</span>Free</button>
-    <button class="nb" onclick="showPage('diary',this)"><span>📖</span>Diary</button>
+    <button class="nb" onclick="showPage('diary',this)"><span>📖</span>Journal</button>
     <button class="nb" onclick="showPage('export',this)"><span>📤</span>Export</button>
     <button class="nb" onclick="showPage('settings',this)"><span>⚙️</span>Settings</button>
   </div>
@@ -444,7 +444,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <div id="safety-banner" style="display:none;"></div>
     <div id="free-version-banner" style="display:none;background:linear-gradient(135deg,#534AB7,#7B72D8);color:#fff;border-radius:14px;padding:14px 16px;margin:12px 0 0;">
       <div style="font-weight:700;font-size:14px;margin-bottom:4px;">🎁 You're using the Free Version</div>
-      <div style="font-size:13px;opacity:0.9;">Unlimited voice & typed diary entries, completely free — no photos in this mode. Want photos too? Go to Export → Add more photos.</div>
+      <div style="font-size:13px;opacity:0.9;">Unlimited voice & typed journal entries, completely free — no photos in this mode. Want photos too? Go to Export → Add more photos.</div>
     </div>
     <div style="padding:12px 0 0;">
       <div class="streak-bar" id="streak-bar" style="margin:0 0 0 0;display:none;">
@@ -469,7 +469,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <button class="edit-inline-btn" id="edit-inline-btn" onclick="openEditOverlay('inline')">✏️ Edit text</button>
       </div>
       <div class="type-area" id="type-area">
-        <textarea class="manual-input" id="manual-input" placeholder="Type your diary entry here…" oninput="onManualType()"></textarea>
+        <textarea class="manual-input" id="manual-input" placeholder="Type your journal entry here…" oninput="onManualType()"></textarea>
         <div class="word-count" id="word-count-type"></div>
       </div>
       <button class="mode-toggle" id="mode-toggle" onclick="toggleMode()">✏️ Type instead</button>
@@ -482,7 +482,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
       <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoSelect(this)">
       <input type="file" id="photo-camera-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelect(this)">
-      <button class="save-btn" id="save-btn" onclick="saveEntry()" disabled>💾 Save to my diary</button>
+      <button class="save-btn" id="save-btn" onclick="saveEntry()" disabled>💾 Save to my journal</button>
       <button class="delete-btn" id="delete-btn" onclick="discardEntry()">🗑 Delete note</button>
       <button class="append-btn" id="append-btn" onclick="appendToLast()">➕ Add to last entry</button>
     </div>
@@ -520,9 +520,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
       <div class="exp-card">
         <h3>📤 Export &amp; backup</h3>
-        <p>Keep your diary safe — export regularly.</p>
+        <p>Keep your journal safe — export regularly.</p>
         <div class="exp-row" onclick="exportText()"><div class="exp-icon p">📄</div><div><div class="exp-row-label">Download as text file</div><div class="exp-row-sub">Free — instant download</div></div></div>
-        <div class="exp-row" onclick="exportJSON()"><div class="exp-icon b">💾</div><div><div class="exp-row-label">Backup diary data (JSON)</div><div class="exp-row-sub">Free — restore on any device</div></div></div>
+        <div class="exp-row" onclick="exportJSON()"><div class="exp-icon b">💾</div><div><div class="exp-row-label">Backup journal data (JSON)</div><div class="exp-row-sub">Free — restore on any device</div></div></div>
         <div class="exp-row" onclick="importJSON()"><div class="exp-icon g">📥</div><div><div class="exp-row-label">Restore from backup</div><div class="exp-row-sub">Import a previous JSON backup</div></div></div>
       </div>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(this)">
@@ -532,9 +532,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="exp-row" onclick="showUpgradeModal()"><div class="exp-icon p">⬆️</div><div><div class="exp-row-label">View photo upgrade plans</div><div class="exp-row-sub">From <span id="exp-tier1-price"></span></div></div></div>
       </div>
       <div class="exp-card">
-        <h3>🎨 Customise your diary</h3>
-        <p>Design your personal printed diary.</p>
-        <div class="exp-row cust-toggle" onclick="toggleCust()"><div class="exp-icon g">✨</div><div style="flex:1"><div class="exp-row-label" style="color:#534AB7">Customise your diary</div><div class="exp-row-sub">Tap to open options</div></div><span id="cust-arrow" style="font-size:18px;color:#534AB7">›</span></div>
+        <h3>🎨 Customise your journal</h3>
+        <p>Design your personal printed journal.</p>
+        <div class="exp-row cust-toggle" onclick="toggleCust()"><div class="exp-icon g">✨</div><div style="flex:1"><div class="exp-row-label" style="color:#534AB7">Customise your journal</div><div class="exp-row-sub">Tap to open options</div></div><span id="cust-arrow" style="font-size:18px;color:#534AB7">›</span></div>
         <div class="cust-panel" id="cust-panel">
           <div class="sub-tabs">
             <button class="sub-tab active" id="st-name" onclick="showSub('name')">📝 Name</button>
@@ -544,7 +544,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
           <div class="sub-content active" id="sc-name">
             <div class="cl">Your name on the cover</div>
             <input class="ci" id="cust-name" type="text" placeholder="e.g. Andrew van der Merwe">
-            <div class="cl">Diary year</div>
+            <div class="cl">Journal year</div>
             <input class="ci" id="cust-year" type="number" value="2026" min="2020" max="2035">
             <div class="cl">Font style</div>
             <div class="font-grid">
@@ -558,11 +558,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
           <div class="sub-content" id="sc-cover">
             <div class="cl">Choose a cover design</div>
             <div class="cover-grid">
-              <div class="cover-opt sel" data-cv="1" onclick="selCover(1)"><div class="cover-prev c1"><div class="ct">My Diary</div><div class="cy">2026</div></div><div class="cover-name">Classic</div></div>
-              <div class="cover-opt" data-cv="2" onclick="selCover(2)"><div class="cover-prev c2"><div class="ct">My Diary</div><div class="cy">2026</div></div><div class="cover-name">Elegant</div></div>
-              <div class="cover-opt" data-cv="3" onclick="selCover(3)"><div class="cover-prev c3"><div class="ct">My Diary</div><div class="cy">2026</div></div><div class="cover-name">Bold</div></div>
-              <div class="cover-opt" data-cv="4" onclick="selCover(4)"><div class="cover-prev c4"><div class="ct">My Diary</div><div class="cy">2026</div></div><div class="cover-name">Nature</div></div>
-              <div class="cover-opt" data-cv="5" onclick="selCover(5)"><div class="cover-prev c5"><div class="ct" style="color:#534AB7">My Diary</div><div class="cy" style="color:#888">2026</div></div><div class="cover-name">Minimal</div></div>
+              <div class="cover-opt sel" data-cv="1" onclick="selCover(1)"><div class="cover-prev c1"><div class="ct">My Journal</div><div class="cy">2026</div></div><div class="cover-name">Classic</div></div>
+              <div class="cover-opt" data-cv="2" onclick="selCover(2)"><div class="cover-prev c2"><div class="ct">My Journal</div><div class="cy">2026</div></div><div class="cover-name">Elegant</div></div>
+              <div class="cover-opt" data-cv="3" onclick="selCover(3)"><div class="cover-prev c3"><div class="ct">My Journal</div><div class="cy">2026</div></div><div class="cover-name">Bold</div></div>
+              <div class="cover-opt" data-cv="4" onclick="selCover(4)"><div class="cover-prev c4"><div class="ct">My Journal</div><div class="cy">2026</div></div><div class="cover-name">Nature</div></div>
+              <div class="cover-opt" data-cv="5" onclick="selCover(5)"><div class="cover-prev c5"><div class="ct" style="color:#534AB7">My Journal</div><div class="cy" style="color:#888">2026</div></div><div class="cover-name">Minimal</div></div>
             </div>
             <div class="cl" style="margin-top:14px">Print size</div>
             <div class="size-row">
@@ -576,7 +576,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
               <div class="layout-opt sel" data-ly="1" onclick="selLayout(1)"><div class="layout-prev l1"><div class="lp-date">Mon 15 June</div><div class="lp-lines"><div></div><div></div><div></div></div></div><div class="layout-name">Classic</div></div>
               <div class="layout-opt" data-ly="2" onclick="selLayout(2)"><div class="layout-prev l2"><div class="lp-date2">Mon 15 June</div><div class="lp-box"></div></div><div class="layout-name">Clean box</div></div>
               <div class="layout-opt" data-ly="3" onclick="selLayout(3)"><div class="layout-prev l3"><div class="lp-time">08:05</div><div class="lp-lines"><div></div><div></div></div><div class="lp-time">17:30</div><div class="lp-lines"><div></div><div></div></div></div><div class="layout-name">Time stamps</div></div>
-              <div class="layout-opt" data-ly="4" onclick="selLayout(4)"><div class="layout-prev l4"><div class="lp-header4">MY DIARY</div><div class="lp-date4">15 June 2026</div><div class="lp-lines"><div></div><div></div><div></div></div></div><div class="layout-name">Formal</div></div>
+              <div class="layout-opt" data-ly="4" onclick="selLayout(4)"><div class="layout-prev l4"><div class="lp-header4">MY JOURNAL</div><div class="lp-date4">15 June 2026</div><div class="lp-lines"><div></div><div></div><div></div></div></div><div class="layout-name">Formal</div></div>
               <div class="layout-opt" data-ly="5" onclick="selLayout(5)"><div class="layout-prev l5"><div class="lp-dotgrid"></div><div class="lp-date5">15 June</div></div><div class="layout-name">Dot grid</div></div>
             </div>
           </div>
@@ -619,7 +619,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
       <div class="set-card">
         <h3>📶 Photo uploads</h3>
-        <p>Save mobile data by only uploading photos when connected to WiFi. Your diary text always saves and syncs normally either way.</p>
+        <p>Save mobile data by only uploading photos when connected to WiFi. Your journal text always saves and syncs normally either way.</p>
         <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#333;margin-top:8px;cursor:pointer;">
           <input type="checkbox" id="wifi-only-toggle" onchange="saveWifiOnlyPref()" style="width:18px;height:18px;">
           Only upload photos on WiFi
@@ -628,7 +628,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
       <div class="set-card">
         <h3>🔒 PIN lock</h3>
-        <p>Protect your diary with a 4-digit PIN.</p>
+        <p>Protect your journal with a 4-digit PIN.</p>
         <div class="pin-row"><input class="pin-input" id="new-pin" type="password" maxlength="4" placeholder="••••" inputmode="numeric"></div>
         <button class="set-btn purple" onclick="savePin()">Set PIN</button>
         <button class="set-btn red" onclick="removePin()">Remove PIN</button>
@@ -644,7 +644,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       </div>
       <div class="set-card">
         <h3>ℹ️ About</h3>
-        <p>My Digital Diary v3.0<br>Built by Andrew — powered by Supabase</p>
+        <p>My Digital Journal v3.0<br>Built by Andrew — powered by Supabase</p>
         <button class="set-btn purple" style="margin-top:10px;" onclick="replayIntro()">▶ Replay intro</button>
       </div>
     </div>
@@ -692,7 +692,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 <div class="photo-viewer" id="photo-viewer">
   <button class="photo-viewer-close" onclick="closePhotoViewer()">✕</button>
-  <img id="photo-viewer-img" src="" alt="diary photo">
+  <img id="photo-viewer-img" src="" alt="journal photo">
 </div>
 <div class="toast" id="toast"></div>
 
@@ -1048,7 +1048,7 @@ async function confirmNewPassword(){
     }
     return;
   }
-  msg.textContent='Password updated! Taking you to your diary…';msg.className='auth-msg success';
+  msg.textContent='Password updated! Taking you to your journal…';msg.className='auth-msg success';
   var {data:{session}}=await sb.auth.getSession();
   setTimeout(function(){
     document.getElementById('reset-screen').style.display='none';
@@ -1329,7 +1329,7 @@ async function saveEntry(){
   document.getElementById('save-btn').disabled=true;
   var btn=document.getElementById('save-btn'); btn.textContent='✅ Saved!'; btn.classList.add('saved');
   setTimeout(function(){
-    btn.textContent='💾 Save to my diary';btn.classList.remove('saved');
+    btn.textContent='💾 Save to my journal';btn.classList.remove('saved');
     transcript='';document.getElementById('live-text').textContent='';document.getElementById('placeholder').style.display='inline';
     document.getElementById('rec-status').textContent='Tap the mic to start recording';document.getElementById('rec-timer').textContent='00:00';
     document.getElementById('delete-btn').style.display='none';document.getElementById('edit-inline-btn').style.display='none';
@@ -1483,7 +1483,7 @@ function renderDiary(filter){
     entries=entries.filter(function(e){return e.text.toLowerCase().includes(fl)||(e.topic&&e.topic.toLowerCase().includes(fl));});
   }
   if(!entries.length){
-    c.innerHTML=filter?'<div class="no-results">No entries found for "'+filter+'"</div>':'<div class="empty-diary"><div class="ei">📔</div><h3>Your diary is empty</h3><p>Tap Record and speak your first entry.</p></div>';
+    c.innerHTML=filter?'<div class="no-results">No entries found for "'+filter+'"</div>':'<div class="empty-diary"><div class="ei">📔</div><h3>YOUR JOURNAL IS EMPTY</h3><p>Tap Record and speak your first entry.</p></div>';
     return;
   }
   var g={};entries.forEach(function(e){if(!g[e.date])g[e.date]=[];g[e.date].push(e);});
@@ -1498,7 +1498,7 @@ function renderDiary(filter){
       html+='<div class="entry-text">'+e.text+'</div><div class="entry-wc">'+wc+' words</div>';
       html+='<div class="entry-photos" id="entry-photos-'+e.id+'">';
       if(e.photos&&e.photos.length){
-        e.photos.forEach(function(url){html+='<div class="entry-photo" onclick="viewPhoto(&quot;'+url+'&quot;)"><img src="'+url+'" alt="diary photo" loading="lazy"></div>';});
+        e.photos.forEach(function(url){html+='<div class="entry-photo" onclick="viewPhoto(&quot;'+url+'&quot;)"><img src="'+url+'" alt="journal photo" loading="lazy"></div>';});
       }
       html+='</div>';
       html+='<div class="entry-actions"><button class="act-btn" onclick="playEntry('+e.id+')">▶ Play</button><button class="act-btn" onclick="openEditOverlay(\'diary\','+e.id+')">✏️ Edit</button><button class="act-btn danger" onclick="delEntry('+e.id+')">🗑 Delete</button></div></div>';
@@ -1551,7 +1551,7 @@ function renderPageView(){
   entries.forEach(function(e){if(!g[e.date])g[e.date]=[];g[e.date].push(e);});
   diaryDates=Object.keys(g).sort(function(a,b){return b.localeCompare(a);});
   var c=document.getElementById('page-container');
-  if(!diaryDates.length){c.innerHTML='<div class="diary-single-page"><div class="empty-diary"><div class="ei">📔</div><h3>No entries yet</h3></div></div>';document.getElementById('page-counter').textContent='';return;}
+  if(!diaryDates.length){c.innerHTML='<div class="diary-single-page"><div class="empty-diary"><div class="ei">📔</div><h3>NO ENTRIES YET</h3></div></div>';document.getElementById('page-counter').textContent='';return;}
   var html='';
   diaryDates.forEach(function(date){
     var d=new Date(date+'T12:00:00');
@@ -1609,7 +1609,7 @@ function playEntry(id){
 }
 
 async function delEntry(id){
-  if(!confirm('Delete this diary entry?'))return;
+  if(!confirm('Delete this journal entry?'))return;
   var entries=getCached().filter(function(e){return e.id!==id;});setCached(entries);
   await deleteFromCloud(id);
   renderDiary();updateStats();updateStreak();showToast('Entry deleted.');
@@ -1626,7 +1626,7 @@ function updateStats(){
 
 function exportText(){
   var entries=getCached();if(!entries.length){showToast('No entries to export yet.');return;}
-  var txt='MY DIGITAL DIARY\n================\n\n',g={};
+  var txt='MY DIGITAL JOURNAL\n================\n\n',g={};
   entries.forEach(function(e){if(!g[e.date])g[e.date]=[];g[e.date].push(e);});
   Object.keys(g).sort(function(a,b){return b.localeCompare(a);}).forEach(function(date){
     var d=new Date(date+'T12:00:00');
@@ -1634,13 +1634,13 @@ function exportText(){
     g[date].forEach(function(e){txt+='['+e.time+']'+(e.topic?' '+e.topic.toUpperCase():'')+'\n'+e.text+'\n\n';});
     txt+='\n';
   });
-  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='MyDigitalDiary.txt';a.click();showToast('Diary downloaded!');
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='MyDigitalJournal.txt';a.click();showToast('Journal downloaded!');
 }
 
 function exportJSON(){
   var entries=getCached();if(!entries.length){showToast('No entries to backup yet.');return;}
   var data={version:1,exported:new Date().toISOString(),entries};
-  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download='MyDigitalDiary_backup.json';a.click();showToast('Backup downloaded! Keep it safe 💾');
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download='MyDigitalJournal_backup.json';a.click();showToast('Backup downloaded! Keep it safe 💾');
 }
 
 function importJSON(){document.getElementById('import-file').click();}
@@ -1674,7 +1674,7 @@ function selLayout(n){selLayoutN=n;document.querySelectorAll('.layout-opt').forE
 function selSize(s){selSizeS=s;document.getElementById('sz-a4').classList.toggle('sel',s==='A4');document.getElementById('sz-a5').classList.toggle('sel',s==='A5');}
 
 function showPreview(){
-  var name=document.getElementById('cust-name').value.trim()||'My Digital Diary';
+  var name=document.getElementById('cust-name').value.trim()||'My Digital Journal';
   var year=document.getElementById('cust-year').value||'2026';
   var entries=getCached();var bg=coverBgs[selCoverN];var tc=coverTxt[selCoverN];
   var subColor=tc==='white'?'rgba(255,255,255,0.75)':'#888';
@@ -1695,7 +1695,7 @@ function showPreview(){
   }
   pagesHtml+='</div>';
   prevPages.push(pagesHtml);
-  prevPages.push('<div class="prev-page-slide"><div class="prev-section-label">BACK COVER</div><div class="prev-back-card" style="background:'+bg+'"><div style="font-size:13px;font-weight:600;color:'+subColor+';">Produced by My Digital Diary</div></div></div>');
+  prevPages.push('<div class="prev-page-slide"><div class="prev-section-label">BACK COVER</div><div class="prev-back-card" style="background:'+bg+'"><div style="font-size:13px;font-weight:600;color:'+subColor+';">Produced by My Digital Journal</div></div></div>');
   prevPageIndex=0;
   var wrap=document.getElementById('prev-pages-wrap');
   wrap.style.width=(prevPages.length*100)+'%';
@@ -1728,7 +1728,7 @@ function saveVoice(){var s=document.getElementById('voice-select');if(s)localSto
 function updateSpeed(){var v=parseFloat(document.getElementById('speed-slider').value).toFixed(2);document.getElementById('speed-val').textContent=v+'x';localStorage.setItem('mdd_spd',v);}
 function getVoice(){var s=localStorage.getItem('mdd_voice')||'';return s?voices.find(function(v){return v.name===s;})||null:null;}
 function getSpeed(){return parseFloat(localStorage.getItem('mdd_spd')||'0.95');}
-function testVoice(){window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance('Hi, this is how your diary will sound when played back.');var v=getVoice();if(v)u.voice=v;u.rate=getSpeed();window.speechSynthesis.speak(u);}
+function testVoice(){window.speechSynthesis.cancel();var u=new SpeechSynthesisUtterance('Hi, this is how your journal will sound when played back.');var v=getVoice();if(v)u.voice=v;u.rate=getSpeed();window.speechSynthesis.speak(u);}
 function saveLang(){var s=document.getElementById('lang-select');if(s)localStorage.setItem('mdd_lang',s.value);}
 
 // ── WIFI-ONLY PHOTO QUEUE SYSTEM ──
@@ -2218,13 +2218,13 @@ function showUpgradeModal(reason){
   var heading, intro;
   if(limit===0 && !trialActive && (!userTier.photo_tier || userTier.photo_tier==='free')){
     heading='📸 Your free photo trial has ended';
-    intro='Your first 7 days included 2 free photos per day to try things out. Voice and typed diary entries remain completely unlimited, always — to keep adding photos, choose a plan below.';
+    intro='Your first 7 days included 2 free photos per day to try things out. Voice and typed journal entries remain completely unlimited, always — to keep adding photos, choose a plan below.';
   } else if(reason==='limit'){
     heading='📸 Photo limit reached';
-    intro='You\'ve used your '+limit+' free photo'+(limit===1?'':'s')+' for today. Your diary entries (voice or typed) are always unlimited — this limit is just for photos.';
+    intro='You\'ve used your '+limit+' free photo'+(limit===1?'':'s')+' for today. Your journal entries (voice or typed) are always unlimited — this limit is just for photos.';
   } else {
     heading='📸 Add more photos each day';
-    intro='Your free plan includes '+limit+' photo'+(limit===1?'':'s')+' per day, with unlimited voice and typed diary entries always. Upgrade any time to add more photos each day.';
+    intro='Your free plan includes '+limit+' photo'+(limit===1?'':'s')+' per day, with unlimited voice and typed journal entries always. Upgrade any time to add more photos each day.';
   }
   modal.innerHTML=
     '<div style="background:#fff;border-radius:18px;max-width:400px;width:100%;padding:24px;max-height:85vh;overflow-y:auto;">'+
@@ -2294,8 +2294,8 @@ function redirectToPayfast(paymentId, tier, amountZar){
   var appUrl='https://verkerkand-cyber.github.io/my-digital-diary/';
   var notifyUrl='https://fzehrjppccsuiqtxbzeo.supabase.co/functions/v1/payfast-itn';
 
-  var nameParts=(currentUser.email||'Diary User').split('@');
-  var displayName=nameParts[0]||'Diary User';
+  var nameParts=(currentUser.email||'Journal User').split('@');
+  var displayName=nameParts[0]||'Journal User';
 
   // CRITICAL: this exact field order is REQUIRED by PayFast for the checkout signature —
   // it is NOT alphabetical (that's only for the separate ITN/API signature format). Getting
@@ -2310,7 +2310,7 @@ function redirectToPayfast(paymentId, tier, amountZar){
     ['email_address', currentUser.email||''],
     ['m_payment_id', paymentId],
     ['amount', amountZar.toFixed(2)],
-    ['item_name', 'My Digital Diary - '+tier],
+    ['item_name', 'My Digital Journal - '+tier],
     ['item_description', 'Photo upgrade subscription']
   ];
 
@@ -2372,7 +2372,7 @@ function closePhotoViewer(){
 
 function openSupport(){
   var email='verkerkand@gmail.com';
-  var subject=encodeURIComponent('My Digital Diary — Support Request');
+  var subject=encodeURIComponent('My Digital Journal — Support Request');
   var body=encodeURIComponent('Hi,\n\nI need help with the following:\n\n[Describe your issue here]\n\nMy account email: '+(currentUser?currentUser.email:''));
   window.location.href='mailto:'+email+'?subject='+subject+'&body='+body;
 }
