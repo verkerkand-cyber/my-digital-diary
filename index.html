@@ -6,6 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Digital Journal">
+<link rel="manifest" href="manifest.json">
 <title>My Digital Journal</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
@@ -932,6 +933,14 @@ async function showApp(){
   await updateQueuedPhotoIndicator();
   await processWifiQueue();
   checkBackupAge();
+
+  // Register the service worker quietly in the background (no permission prompt yet —
+  // registering alone never triggers a browser popup). The actual permission request
+  // only happens if/when the user taps "Enable" on the banner below.
+  registerServiceWorker();
+  // Wait a few seconds before showing the reminder-opt-in banner, so it doesn't compete
+  // with the safety banner or onboarding for the user's attention on first load.
+  setTimeout(maybeShowNotificationPrompt, 4000);
 
   // Auto sync every 30 seconds when online
   setInterval(function(){
@@ -2154,6 +2163,9 @@ async function loadUserTier(){
   userTier.entries_today_date=data.entries_today_date;
   userTier.created_at=data.created_at;
   await resetCountersIfNewDay();
+  syncUserTimezone(); // fire-and-forget — keeps the server-side daily-limit check
+                       // (used by the diary-photos storage policy) resetting at THIS
+                       // user's own local midnight rather than a fixed timezone.
 }
 
 // NOTE: this no longer writes to the database. The server-side functions
@@ -2170,6 +2182,24 @@ async function resetCountersIfNewDay(){
   if(userTier.entries_today_date!==today){
     userTier.entries_today=0; userTier.entries_today_date=today;
   }
+}
+
+// Captures the browser's own IANA timezone (e.g. "Africa/Johannesburg",
+// "Europe/London") and saves it to the user's profile, so the server-side
+// daily-photo-limit check (which can't ask the browser directly) can reset
+// at THIS user's own local midnight instead of a single fixed timezone.
+// Only writes when it's actually changed, to avoid an update on every single
+// app load — and fails silently, since this is a nice-to-have precision
+// improvement, never something that should block normal app use.
+var lastSyncedTimezone=null;
+async function syncUserTimezone(){
+  if(!currentUser) return;
+  try{
+    var tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if(!tz || tz===lastSyncedTimezone) return;
+    var {error}=await sb.from('profiles').update({timezone:tz}).eq('id',currentUser.id);
+    if(!error) lastSyncedTimezone=tz;
+  }catch(e){ /* not critical — silently skip, server falls back to a default timezone */ }
 }
 
 function isInFreeTrial(){
@@ -2243,6 +2273,127 @@ async function incrementEntryCount(){
   }
   userTier.entries_today=data.entries_today!==undefined?data.entries_today:userTier.entries_today;
   return false;
+}
+
+// ── PUSH NOTIFICATIONS ──
+// Public VAPID key — safe to be public, this is how the browser verifies that push
+// messages genuinely come from our server (the matching private key lives only in
+// Supabase Edge Function secrets, never in this file).
+var VAPID_PUBLIC_KEY='BNQIRLEpExp8VxRXgm9rfNu7X9RPgr2hNGovdEgVel5iAuYVbDSvQ4iYJBNkErBnSX9vKs2HMlPzSLuD41qYn8U';
+
+function urlBase64ToUint8Array(base64String){
+  var padding='='.repeat((4-base64String.length%4)%4);
+  var base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  var rawData=window.atob(base64);
+  var outputArray=new Uint8Array(rawData.length);
+  for(var i=0;i<rawData.length;++i){ outputArray[i]=rawData.charCodeAt(i); }
+  return outputArray;
+}
+
+// Registers the service worker. Safe to call every time the app loads — registering
+// an already-registered worker is a harmless no-op in all browsers.
+async function registerServiceWorker(){
+  if(!('serviceWorker' in navigator)) return null;
+  try{
+    var reg=await navigator.serviceWorker.register('sw.js');
+    return reg;
+  }catch(e){
+    console.error('Service worker registration failed',e);
+    return null;
+  }
+}
+
+// Returns true if this browser/OS combination can support web push at all.
+// iOS Safari only supports it for apps added to the Home Screen (running in
+// standalone mode) — ordinary browser tabs on iPhone cannot receive push, full stop.
+function pushIsSupportedHere(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+  var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if(isIOS){
+    var isStandalone=window.navigator.standalone===true ||
+                      window.matchMedia('(display-mode: standalone)').matches;
+    return isStandalone;
+  }
+  return true;
+}
+
+// Shows a small, dismissible banner asking the user to enable reminders — only if
+// notifications are supported AND the user hasn't already answered (allowed, denied,
+// or dismissed) before. Never shown immediately on first load; called from showApp()
+// after a short delay so it doesn't compete with onboarding.
+function maybeShowNotificationPrompt(){
+  if(!pushIsSupportedHere()) return;
+  if(typeof Notification==='undefined') return;
+  if(Notification.permission!=='default') return; // already allowed, denied, or unsupported
+  if(localStorage.getItem('mdd_notif_prompt_dismissed')) return;
+  var existing=document.getElementById('notif-prompt-banner');
+  if(existing) return;
+
+  var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  var banner=document.createElement('div');
+  banner.id='notif-prompt-banner';
+  banner.style.cssText='position:fixed;bottom:16px;left:16px;right:16px;background:#fff;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:16px;z-index:9998;display:flex;align-items:center;gap:12px;';
+  banner.innerHTML=
+    '<div style="font-size:24px;">🔔</div>'+
+    '<div style="flex:1;font-size:13px;color:#333;">Want a gentle reminder if you haven\'t journaled in a while? '+
+    (isIOS?'(Already added to your Home Screen — you\'re all set to enable this.)':'')+
+    '</div>'+
+    '<button id="notif-prompt-enable" style="background:#534AB7;color:#fff;border:none;border-radius:10px;padding:8px 14px;font-weight:600;font-size:13px;white-space:nowrap;">Enable</button>'+
+    '<button id="notif-prompt-dismiss" style="background:none;border:none;color:#999;font-size:18px;padding:4px;">✕</button>';
+  document.body.appendChild(banner);
+
+  document.getElementById('notif-prompt-dismiss').onclick=function(){
+    localStorage.setItem('mdd_notif_prompt_dismissed','1');
+    banner.remove();
+  };
+  document.getElementById('notif-prompt-enable').onclick=async function(){
+    banner.remove();
+    await requestNotificationPermissionAndSubscribe();
+  };
+}
+
+// Actually requests the browser permission prompt (must be triggered by a user
+// gesture like a button click — browsers block silent/automatic permission requests)
+// and, if granted, subscribes to push and saves the subscription to Supabase.
+async function requestNotificationPermissionAndSubscribe(){
+  if(!pushIsSupportedHere()){
+    var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if(isIOS){
+      showToast('On iPhone, please add this app to your Home Screen first (Share → Add to Home Screen), then try again');
+    }else{
+      showToast('Push notifications aren\'t supported in this browser');
+    }
+    return false;
+  }
+  try{
+    var permission=await Notification.requestPermission();
+    if(permission!=='granted'){
+      showToast('Notifications weren\'t enabled — you can turn them on later from Settings');
+      return false;
+    }
+    var reg=await registerServiceWorker();
+    if(!reg){ showToast('Something went wrong setting up notifications'); return false; }
+    await navigator.serviceWorker.ready;
+    var subscription=await reg.pushManager.subscribe({
+      userVisibleOnly:true,
+      applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    var rawKey=subscription.toJSON();
+    if(!currentUser) return false;
+    var {error}=await sb.from('push_subscriptions').upsert({
+      user_id:currentUser.id,
+      endpoint:rawKey.endpoint,
+      p256dh:rawKey.keys.p256dh,
+      auth_key:rawKey.keys.auth
+    },{onConflict:'user_id,endpoint'});
+    if(error){ console.error('Saving push subscription failed',error); showToast('Notifications enabled, but saving the setting failed — try again'); return false; }
+    showToast('Reminders enabled 🔔');
+    return true;
+  }catch(e){
+    console.error('Push subscription failed',e);
+    showToast('Something went wrong enabling notifications');
+    return false;
+  }
 }
 
 function showUpgradeModal(reason){
