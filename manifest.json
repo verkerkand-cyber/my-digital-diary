@@ -1,0 +1,10 @@
+{
+  "name": "My Digital Journal",
+  "short_name": "My Journal",
+  "start_url": "/my-digital-diary/",
+  "scope": "/my-digital-diary/",
+  "display": "standalone",
+  "background_color": "#F4F3F8",
+  "theme_color": "#534AB7",
+  "icons": []
+}
