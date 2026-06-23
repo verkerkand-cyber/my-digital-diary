@@ -1375,6 +1375,7 @@ async function handlePhotosAfterEntrySaved(entryId,photos){
   // Upload immediately (either WiFi-only is off, we're confident we're on WiFi,
   // or the person explicitly chose to use mobile data)
   var urls=[];
+  var limitBlockedAny=false;
   for(var i=0;i<photos.length;i++){
     var p=photos[i];
     var ext=p.file.name.split('.').pop()||'jpg';
@@ -1383,13 +1384,23 @@ async function handlePhotosAfterEntrySaved(entryId,photos){
     if(!error){
       var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
       urls.push(urlData.publicUrl);
+    }else if(error.message&&error.message.toLowerCase().indexOf('row-level security')!==-1){
+      // The server-side storage policy blocked this upload because the daily photo
+      // limit was actually reached (catches the case where local/server counts drifted,
+      // or someone tried to bypass the UI's own check).
+      limitBlockedAny=true;
     }
   }
   if(urls.length>0){
     await attachQueuedPhotoUrlsToEntry(entryId,urls);
     localStorage.setItem('mdd_last_backup',Date.now().toString());
   }
-  await incrementPhotoCount(photos.length);
+  if(urls.length>0){
+    await incrementPhotoCount(urls.length);
+  }
+  if(limitBlockedAny){
+    showToast('Your entry saved, but '+(urls.length>0?'some photos':'the photo')+' couldn\'t be added — daily photo limit reached');
+  }
 }
 
 async function attachQueuedPhotoUrlsToEntry(entryId,urls){
@@ -2145,20 +2156,19 @@ async function loadUserTier(){
   await resetCountersIfNewDay();
 }
 
+// NOTE: this no longer writes to the database. The server-side functions
+// (increment_photo_count / increment_entry_count) handle day-rollover themselves
+// whenever they're called, and the counter columns are no longer client-writable
+// (see Supabase RLS lockdown). This function now only updates the LOCAL display
+// state, so the UI shows 0 immediately on a new day rather than a stale number
+// from yesterday, without needing a database write to do it.
 async function resetCountersIfNewDay(){
   var today=todayStr();
-  var needsUpdate=false;
-  var updates={};
   if(userTier.photos_today_date!==today){
     userTier.photos_today=0; userTier.photos_today_date=today;
-    updates.photos_today=0; updates.photos_today_date=today; needsUpdate=true;
   }
   if(userTier.entries_today_date!==today){
     userTier.entries_today=0; userTier.entries_today_date=today;
-    updates.entries_today=0; updates.entries_today_date=today; needsUpdate=true;
-  }
-  if(needsUpdate&&currentUser){
-    await sb.from('profiles').update(updates).eq('id',currentUser.id);
   }
 }
 
@@ -2180,6 +2190,11 @@ function currentPhotoLimit(){
   return 0;
 }
 
+// These remain fast, client-side checks purely for instant UI feedback (e.g. disabling
+// the camera button before the user even tries). They are NOT the real enforcement —
+// the actual limit is enforced server-side (see increment_photo_count / the diary-photos
+// storage policy in Supabase), so even if these were bypassed entirely, the upload itself
+// would still be rejected by the server.
 async function canAddPhoto(){
   await resetCountersIfNewDay();
   var limit=currentPhotoLimit();
@@ -2192,16 +2207,42 @@ async function canAddEntry(){
   return userTier.entries_today<ENTRY_DAILY_CAP;
 }
 
+// SECURITY: these now call server-side functions (increment_photo_count /
+// increment_entry_count in Supabase) instead of writing photos_today/entries_today
+// directly. The client can no longer set its own counters — the server checks the
+// real limit and only increments if the user is genuinely still under it, even if
+// someone bypasses the UI and calls Supabase directly from the browser console.
+// Both return true/false so callers can react if the server says no.
 async function incrementPhotoCount(n){
-  if(!currentUser) return;
-  userTier.photos_today+=n;
-  await sb.from('profiles').update({photos_today:userTier.photos_today,photos_today_date:userTier.photos_today_date}).eq('id',currentUser.id);
+  if(!currentUser) return false;
+  var {data,error}=await sb.rpc('increment_photo_count',{p_today:todayStr(),p_count:n});
+  if(error||!data){
+    console.error('increment_photo_count failed',error);
+    return false;
+  }
+  if(data.ok){
+    userTier.photos_today=data.photos_today;
+    return true;
+  }
+  // Server disagreed with the client's own count (limit actually reached) —
+  // resync local state so the UI reflects reality.
+  userTier.photos_today=data.photos_today!==undefined?data.photos_today:userTier.photos_today;
+  return false;
 }
 
 async function incrementEntryCount(){
-  if(!currentUser) return;
-  userTier.entries_today+=1;
-  await sb.from('profiles').update({entries_today:userTier.entries_today,entries_today_date:userTier.entries_today_date}).eq('id',currentUser.id);
+  if(!currentUser) return false;
+  var {data,error}=await sb.rpc('increment_entry_count',{p_today:todayStr()});
+  if(error||!data){
+    console.error('increment_entry_count failed',error);
+    return false;
+  }
+  if(data.ok){
+    userTier.entries_today=data.entries_today;
+    return true;
+  }
+  userTier.entries_today=data.entries_today!==undefined?data.entries_today:userTier.entries_today;
+  return false;
 }
 
 function showUpgradeModal(reason){
