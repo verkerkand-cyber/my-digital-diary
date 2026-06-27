@@ -743,8 +743,7 @@ var coverTxt={'1':'white','2':'white','3':'white','4':'white','5':'#534AB7'};
 
 // ── LOCAL CACHE ──
 function getCached(){try{return JSON.parse(localStorage.getItem('mdd_cache')||'[]');}catch(e){return[];}}
-function setCached(a){localStorage.setItem('mdd_cache',JSON.stringify(a));}
-
+function setCached(a){try{localStorage.setItem('mdd_cache',JSON.stringify(a));}catch(e){console.warn('Cache storage full:',e);}}
 // ── INIT ──
 async function init(){
   // Check online
