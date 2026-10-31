@@ -1,10 +1,17 @@
 {
-  "name": "My Digital Journal",
-  "short_name": "My Journal",
-  "start_url": "/my-digital-diary/",
+  "id": "/my-digital-diary/",
+  "name": "My Digital Diary",
+  "short_name": "My Diary",
+  "description": "Your private voice & photo diary — and print it as a real book.",
+  "start_url": "/my-digital-diary/?app=1",
   "scope": "/my-digital-diary/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#F4F3F8",
   "theme_color": "#534AB7",
-  "icons": []
+  "icons": [
+    { "src": "icon-192.png?v=1", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png?v=1", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png?v=1", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }
