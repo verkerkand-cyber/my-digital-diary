@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Digital Journal">
-<meta name="build" content="DIARY-PRINT-1">
+<meta name="build" content="DIARY-PRINT-2">
 <meta name="theme-color" content="#534AB7">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -370,6 +370,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .pb-done{font-size:13px;color:#166534;background:#DCFCE7;border-radius:10px;padding:10px 12px;margin-top:12px;line-height:1.45;}
 .pb-dl{display:block;text-align:center;margin-top:8px;padding:12px;border-radius:12px;background:#16A34A;color:#fff;font-weight:700;font-size:14px;text-decoration:none;}
 .pb-warn{font-size:12px;color:#8a5a00;background:#FEF3C7;border-radius:10px;padding:8px 10px;margin-top:8px;line-height:1.45;}
+.pb-wrap-box{width:100%;margin-bottom:6px;}
+.pb-wrap-box canvas{display:block;box-shadow:0 3px 12px rgba(0,0,0,0.25);border-radius:2px;background:#eee;max-width:100%;}
+.pb-wrap-labels{display:grid;font-size:10px;color:#999;text-align:center;margin-top:3px;overflow:hidden;white-space:nowrap;}
+.pb-spine-info{font-size:12px;color:#555;background:#F4F2FF;border-radius:10px;padding:8px 10px;margin:6px 0 10px;line-height:1.45;}
+.pb-photo-btns{display:flex;gap:8px;}
+.pb-photo-btns>div{flex:1;min-width:0;}
+textarea.pb-in{resize:vertical;min-height:64px;}
+.pb-inside-row{display:flex;gap:10px;margin:4px 0 4px;}
+.pb-inside-col{flex:1;min-width:0;text-align:center;}
+.pb-inside-col canvas{display:block;margin:0 auto 4px;box-shadow:0 1px 6px rgba(0,0,0,0.2);background:#fff;}
+.pb-inside-col .pb-lbl{text-align:center;}
+.pb-inside-col select{font-size:12px;padding:7px 6px;}
 .pay-modal{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;}
 .pay-box{background:#fff;border-radius:18px;max-width:400px;width:100%;padding:22px;max-height:88vh;overflow-y:auto;}
 .pay-box h3{margin:0 0 8px;color:#534AB7;font-size:18px;}
@@ -676,24 +688,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="pb-step">1 · Book size</div>
         <div class="pb-formats" id="pb-formats"></div>
 
-        <div class="pb-step">2 · Cover</div>
-        <div class="pb-cover-row">
-          <div class="pb-cover-wrap" id="pb-cover-wrap"><canvas id="pb-cover-canvas" width="150" height="200"></canvas></div>
-          <div class="pb-cover-ctrl">
-            <button type="button" class="pb-small-btn" id="pb-cover-btn" onclick="pbCoverPick()">🖼️ Add a cover photo</button>
-            <button type="button" class="pb-small-btn" id="pb-cover-clear" style="display:none" onclick="pbCoverClear()">✕ Remove cover photo</button>
-            <input type="file" id="pb-cover-file" accept="image/*" style="display:none" onchange="pbCoverChosen(this)">
-            <div class="pb-lbl">Title</div>
-            <input class="pb-in" id="pb-title" maxlength="60" oninput="pbTitleInput(this)">
-            <div class="pb-lbl">Line under the title</div>
-            <input class="pb-in" id="pb-sub" maxlength="60" oninput="pbSubInput(this)">
-          </div>
+        <div class="pb-step">2 · Covers</div>
+        <div class="pb-wrap-box" id="pb-wrap-box">
+          <canvas id="pb-wrap-canvas" width="320" height="220"></canvas>
+          <div class="pb-wrap-labels" id="pb-wrap-labels"><span>Back</span><span>Spine</span><span>Front</span></div>
         </div>
-        <div class="pb-lbl" style="margin-top:6px">Cover style</div>
+        <div class="pb-spine-info" id="pb-spine-info"></div>
+        <div class="pb-lbl">Paper (sets the spine width)</div>
+        <select class="pb-in" id="pb-paper" onchange="pbOpt()"></select>
+        <div class="pb-lbl">Title — also printed on the spine</div>
+        <input class="pb-in" id="pb-title" maxlength="60" oninput="pbTitleInput(this)">
+        <div class="pb-lbl">Line under the title</div>
+        <input class="pb-in" id="pb-sub" maxlength="60" oninput="pbSubInput(this)">
+        <div class="pb-lbl">Cover style</div>
         <div class="pb-chips" id="pb-styles"></div>
         <div class="pb-lbl">Colour</div>
         <div class="pb-colors" id="pb-colors"></div>
-        <div class="pb-note" id="pb-cover-note">Your cover photo stays on your phone — it is only used to make the PDF.</div>
+        <div class="pb-photo-btns">
+          <div><button type="button" class="pb-small-btn" id="pb-cover-btn" data-add="🖼️ Front photo" data-change="🖼️ Change front photo" onclick="pbCoverPick('cover')">🖼️ Front photo</button>
+            <button type="button" class="pb-small-btn" id="pb-cover-clear" style="display:none" onclick="pbCoverClear('cover')">✕ Remove</button></div>
+          <div><button type="button" class="pb-small-btn" id="pb-back-btn" data-add="🖼️ Back photo" data-change="🖼️ Change back photo" onclick="pbCoverPick('back')">🖼️ Back photo</button>
+            <button type="button" class="pb-small-btn" id="pb-back-clear" style="display:none" onclick="pbCoverClear('back')">✕ Remove</button></div>
+        </div>
+        <input type="file" id="pb-cover-file" accept="image/*" style="display:none" onchange="pbCoverChosen(this,'cover')">
+        <input type="file" id="pb-back-file" accept="image/*" style="display:none" onchange="pbCoverChosen(this,'back')">
+        <div class="pb-lbl">Back cover text (optional)</div>
+        <textarea class="pb-in" id="pb-blurb" rows="3" maxlength="400" placeholder="A few words for the back cover — e.g. what this year was about" oninput="pbOpt()"></textarea>
+        <div class="pb-inside-row">
+          <div class="pb-inside-col"><canvas id="pb-inf-canvas"></canvas><div class="pb-lbl">Inside front</div><select class="pb-in" id="pb-insf" onchange="pbOpt()"></select></div>
+          <div class="pb-inside-col"><canvas id="pb-inb-canvas"></canvas><div class="pb-lbl">Inside back</div><select class="pb-in" id="pb-insb" onchange="pbOpt()"></select></div>
+        </div>
+        <div id="pb-plate-row"><div class="pb-lbl">Name on the bookplate (leave empty for a line to write on)</div><input class="pb-in" id="pb-plate" maxlength="40" oninput="pbOpt()"></div>
+        <button type="button" class="pb-small-btn" id="pb-inside-btn" data-add="🖼️ Photo for inside covers" data-change="🖼️ Change inside-cover photo" onclick="pbCoverPick('inside')">🖼️ Photo for inside covers</button>
+        <button type="button" class="pb-small-btn" id="pb-inside-clear" style="display:none" onclick="pbCoverClear('inside')">✕ Remove inside-cover photo</button>
+        <input type="file" id="pb-inside-file" accept="image/*" style="display:none" onchange="pbCoverChosen(this,'inside')">
+        <div class="pb-note" id="pb-cover-note">Cover photos stay on your phone — they are only used to make the PDF.</div>
 
         <div class="pb-step">3 · Which entries</div>
         <div class="pb-dates">
@@ -708,11 +737,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         <div class="pb-summary" id="pb-summary"></div>
 
         <div class="pb-step">4 · Print options</div>
-        <div class="pb-radio">
-          <label><input type="radio" name="pb-covermode" value="page" checked onchange="pbOpt()"> Cover as page 1</label>
-          <label><input type="radio" name="pb-covermode" value="separate" onchange="pbOpt()"> Separate cover file</label>
-        </div>
-        <label class="pb-check"><input type="checkbox" id="pb-crop" onchange="pbOpt()"><span>Add crop marks <small style="color:#999">(only if your printer asks for them)</small></span></label>
+        <p class="pb-note" style="margin-bottom:8px">You get two files: the <b>cover</b> (back + spine + front in one piece) and the <b>inside pages</b> (page 1 = inside front cover, last page = inside back cover).</p>
+        <label class="pb-check"><input type="checkbox" id="pb-crop" onchange="pbOpt()"><span>Add crop marks &amp; spine marks <small style="color:#999">(only if your printer asks for them)</small></span></label>
 
         <div class="pb-actions">
           <button type="button" class="pb-prev-btn" id="pb-prev-btn" onclick="pbPreview()">👁 Preview pages (free)</button>
@@ -720,7 +746,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         </div>
         <div class="pb-prog" id="pb-prog"><div class="pb-prog-track"><div class="pb-prog-bar" id="pb-prog-bar"></div></div><div class="pb-prog-label" id="pb-prog-label"></div></div>
         <div id="pb-out"></div>
-        <p class="pb-note" style="margin-top:10px">Tip: online printers usually want the cover as a separate file and no crop marks. Emoji in your entries are left out of the PDF (printers' standard fonts can't show them).</p>
+        <p class="pb-note" style="margin-top:10px">Tip: most online printers want exactly these two files and no crop marks. Check their spine width for your page count and paper — if theirs differs, pick the matching paper above.</p>
       </div>
     </div>
   </div>
@@ -1249,6 +1275,7 @@ async function signUp(){
 async function signOut(){
   await sb.auth.signOut();
   setCached([]);
+  try{ localStorage.removeItem('mdd_signed'); mddSignCache={}; }catch(e){}
   closeUserMenu();
 }
 
@@ -1275,7 +1302,7 @@ async function syncEntries(){
   // Pull latest from cloud
   var {data,error}=await sb.from('diary_entries').select('*').eq('user_id',currentUser.id).order('created_at',{ascending:false});
   if(!error&&data){
-    var cloudMapped=data.map(function(r){return{id:r.id,date:r.date,dayName:r.day_name,time:r.time,topic:r.topic||'',text:r.text,photos:r.photos||[]};});
+    var cloudMapped=data.map(function(r){return{id:r.id,date:r.date,dayName:r.day_name,time:r.time,topic:r.topic||'',text:r.text,photos:mddNormPhotos(r.photos)};});
     // Keep any local entries still pending sync (not yet in cloud) so they don't disappear
     var stillPending=getCached().filter(function(e){ return e.pendingSync; });
     var merged=stillPending.concat(cloudMapped);
@@ -1516,7 +1543,7 @@ async function handlePhotosAfterEntrySaved(entryId,photos){
     var choice=await showDataChoicePrompt();
     if(choice==='wait'){
       for(var i=0;i<photos.length;i++){
-        await queuePhotoForWifi(photos[i].file,entryId);
+        await queuePhotoForWifi(photos[i].file,entryId,photos[i].printFile);
       }
       if(!localStorage.getItem('mdd_last_backup')) localStorage.setItem('mdd_last_backup',Date.now().toString());
       await updateQueuedPhotoIndicator();
@@ -1534,10 +1561,9 @@ async function handlePhotosAfterEntrySaved(entryId,photos){
     var p=photos[i];
     var ext=p.file.name.split('.').pop()||'jpg';
     var path=currentUser.id+'/'+entryId+'/'+Date.now()+'_'+i+'.'+ext;
-    var {error}=await sb.storage.from('diary-photos').upload(path,p.file,{contentType:p.file.type});
+    var {error}=await mddUploadPhoto(p.file,p.printFile,path);
     if(!error){
-      var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
-      urls.push(urlData.publicUrl);
+      urls.push(path); // DIARY-PRINT-2: entries store the storage PATH; links are signed when shown
     }else if(error.message&&error.message.toLowerCase().indexOf('row-level security')!==-1){
       // The server-side storage policy blocked this upload because the daily photo
       // limit was actually reached (catches the case where local/server counts drifted,
@@ -1562,7 +1588,7 @@ async function attachQueuedPhotoUrlsToEntry(entryId,urls){
   var entries=getCached();
   var entry=entries.find(function(e){return e.id===entryId;});
   if(entry){
-    entry.photos=(entry.photos||[]).concat(urls);
+    entry.photos=mddNormPhotos(entry.photos).concat(urls);
     setCached(entries);
     await sb.from('diary_entries').update({photos:entry.photos}).eq('id',entryId).eq('user_id',currentUser.id);
     renderDiary();
@@ -1664,7 +1690,7 @@ function renderDiary(filter){
       html+='<div class="entry-text">'+e.text+'</div><div class="entry-wc">'+wc+' words</div>';
       html+='<div class="entry-photos" id="entry-photos-'+e.id+'">';
       if(e.photos&&e.photos.length){
-        e.photos.forEach(function(url){html+='<div class="entry-photo" onclick="viewPhoto(&quot;'+url+'&quot;)"><img src="'+url+'" alt="journal photo" loading="lazy"></div>';});
+        e.photos.forEach(function(x){html+=mddPhotoHtml(x);});
       }
       html+='</div>';
       html+='<div class="entry-actions"><button class="act-btn" onclick="playEntry('+e.id+')">▶ Play</button><button class="act-btn" onclick="openEditOverlay(\'diary\','+e.id+')">✏️ Edit</button><button class="act-btn danger" onclick="delEntry('+e.id+')">🗑 Delete</button></div></div>';
@@ -1672,6 +1698,7 @@ function renderDiary(filter){
     html+='</div>';
   });
   c.innerHTML=html;
+  mddHydratePhotos(c);
   if(curView==='page')renderPageView();
   renderQueuedPhotoPlaceholders();
 }
@@ -1920,12 +1947,12 @@ function openWifiQueueDB(){
   });
 }
 
-async function queuePhotoForWifi(file,entryId){
+async function queuePhotoForWifi(file,entryId,printFile){
   var db=await openWifiQueueDB();
   return new Promise(function(resolve,reject){
     var tx=db.transaction(WIFI_STORE,'readwrite');
     var store=tx.objectStore(WIFI_STORE);
-    var record={file:file,entryId:entryId,queuedAt:Date.now(),userId:currentUser?currentUser.id:null};
+    var record={file:file,printFile:printFile||null,entryId:entryId,queuedAt:Date.now(),userId:currentUser?currentUser.id:null};
     var req=store.add(record);
     req.onsuccess=function(){resolve(req.result);};
     req.onerror=function(){reject(req.error);};
@@ -2035,10 +2062,9 @@ async function processWifiQueue(){
     try{
       var ext=item.file.name.split('.').pop()||'jpg';
       var path=currentUser.id+'/'+item.entryId+'/'+Date.now()+'_q'+item.id+'.'+ext;
-      var {error}=await sb.storage.from('diary-photos').upload(path,item.file,{contentType:item.file.type});
+      var {error}=await mddUploadPhoto(item.file,item.printFile,path);
       if(!error){
-        var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
-        await attachQueuedPhotoUrlToEntry(item.entryId,urlData.publicUrl);
+        await attachQueuedPhotoUrlToEntry(item.entryId,path);
         await deleteQueuedPhoto(item.id);
         await incrementPhotoCount(1);
         localStorage.setItem('mdd_last_backup',Date.now().toString());
@@ -2129,10 +2155,11 @@ async function takePhoto(){
   document.getElementById('photo-camera-input').click();
 }
 
-function compressImage(file){
+function compressImage(file,opts){
+  opts=opts||{};
   return new Promise(function(resolve){
-    var maxDim=1600; // long edge cap in pixels — good for phone/screen viewing
-    var quality=0.75; // quality, 0–1 (applies to both WebP and the JPEG fallback)
+    var maxDim=opts.maxDim||1600; // long edge cap in pixels — good for phone/screen viewing
+    var quality=opts.quality||0.75; // quality, 0–1 (applies to both WebP and the JPEG fallback)
     // PRINT NOTE (DIARY-PRINT-1): the print PDF downloads these stored uploads (signed links to the
     // originals in storage) and places them at up to 300 dpi — never upscaled. Because uploads are
     // capped at 1600 px, a photo printed wider than ~135 mm comes out below 300 dpi; the PDF screen
@@ -2142,6 +2169,7 @@ function compressImage(file){
     reader.onload=function(e){
       img.onload=function(){
         var w=img.width,h=img.height;
+        if(opts.minSrc && Math.max(w,h)<=opts.minSrc){ resolve(null); return; } // print copy only when the photo is bigger than the screen copy
         if(w>maxDim||h>maxDim){
           if(w>h){h=Math.round(h*(maxDim/w));w=maxDim;}
           else{w=Math.round(w*(maxDim/h));h=maxDim;}
@@ -2160,6 +2188,7 @@ function compressImage(file){
           },'image/jpeg',quality);
         }
 
+        if(opts.jpegOnly){ finishAsJpeg(); return; }
         // Try WebP first — typically meaningfully smaller than JPEG at equivalent visual quality,
         // which directly reduces ongoing photo storage costs. IMPORTANT: canvas.toBlob silently
         // substitutes PNG (not an error) if a browser doesn't actually support the requested type,
@@ -2175,10 +2204,10 @@ function compressImage(file){
           }
         },'image/webp',quality);
       };
-      img.onerror=function(){resolve(file);}; // fallback to original if image fails to load
+      img.onerror=function(){resolve(opts.minSrc?null:file);}; // fallback to original if image fails to load
       img.src=e.target.result;
     };
-    reader.onerror=function(){resolve(file);};
+    reader.onerror=function(){resolve(opts.minSrc?null:file);};
     reader.readAsDataURL(file);
   });
 }
@@ -2211,9 +2240,10 @@ async function handlePhotoSelect(input){
   for(var i=0;i<files.length;i++){
     var originalFile=files[i];
     var file=await compressImage(originalFile);
+    var printFile=await mddMakePrintCopy(originalFile);
     var url=URL.createObjectURL(file);
     var idx=pendingPhotos.length;
-    pendingPhotos.push({file:file,localUrl:url,cloudPath:null});
+    pendingPhotos.push({file:file,printFile:printFile,localUrl:url,cloudPath:null});
     var div=document.createElement('div');
     div.className='photo-thumb';
     div.id='photo-thumb-'+idx;
@@ -2251,11 +2281,8 @@ async function uploadPhotos(entryId){
     var path=currentUser.id+'/'+entryId+'/'+Date.now()+'_'+i+'.'+ext;
     var thumb=document.getElementById('photo-thumb-'+i);
     if(thumb){var ov=document.createElement('div');ov.className='photo-uploading';ov.textContent='Uploading…';thumb.appendChild(ov);}
-    var {data,error}=await sb.storage.from('diary-photos').upload(path,p.file,{contentType:p.file.type});
-    if(!error){
-      var {data:urlData}=sb.storage.from('diary-photos').getPublicUrl(path);
-      urls.push(urlData.publicUrl);
-    }
+    var {error}=await mddUploadPhoto(p.file,p.printFile,path);
+    if(!error) urls.push(path);
     if(thumb){var ov2=thumb.querySelector('.photo-uploading');if(ov2)ov2.remove();}
   }
   return urls;
@@ -2606,9 +2633,10 @@ function selectUpgradeTier(tier){
   payBuy(tier);
 }
 
-function viewPhoto(url){
-  document.getElementById('photo-viewer-img').src=url;
-  document.getElementById('photo-viewer').classList.add('show');
+async function viewPhoto(key){
+  var img=document.getElementById('photo-viewer-img');
+  img.src=''; document.getElementById('photo-viewer').classList.add('show');
+  img.src=await mddPhotoSrc(key);
 }
 
 function closePhotoViewer(){
@@ -2635,8 +2663,77 @@ function showToast(m){var t=document.getElementById('toast');t.textContent=m;t.c
 </script>
 <script>
 /* ==========================================================================
-   DIARY-PRINT-1 — print-ready book PDF, install button, Payhip payments
+   DIARY-PRINT-2 — print-ready book PDFs + full cover set, emoji, private photos, install button, Payhip payments
    ========================================================================== */
+
+// ── PRIVATE PHOTOS + PRINT COPIES (DIARY-PRINT-2) ──
+// Entries store the storage PATH of each photo ("<user id>/<entry id>/<file>"), never a public link.
+// Photos are shown through short-lived signed links, so the diary-photos bucket can be PRIVATE.
+// Old entries that still hold a full public URL are converted to a path when read.
+// Works while the bucket is still public too (falls back to the public link if signing fails).
+var PHOTO_BUCKET='diary-photos';
+var PRINT_COPY={on:true,maxDim:3200,quality:0.85}; // extra high-res copy kept only for printing (≈1–2.5 MB each)
+var SIGN_TTL=12*3600;                               // signed links last 12 h, re-signed when < 1 h left
+function mddPhotoPath(x){
+  if(!x) return null; if(typeof x==='object') x=x.path||x.url||'';
+  var s=String(x), m=s.match(/\/diary-photos\/([^?#]+)/);
+  if(m) return decodeURIComponent(m[1]);
+  if(/^(https?:|blob:|data:)/i.test(s)) return null;
+  return s.replace(/^\/+/,'');
+}
+function mddNormPhotos(arr){ return (Array.isArray(arr)?arr:[]).map(function(x){ return mddPhotoPath(x)||x; }).filter(Boolean); }
+function mddPrintPath(p){ return String(p).replace(/\.[^.\/]+$/,'')+'.print.jpg'; }
+function mddPublicUrl(p){ try{ return sb.storage.from(PHOTO_BUCKET).getPublicUrl(p).data.publicUrl; }catch(e){ return ''; } }
+var mddSignCache={}; try{ mddSignCache=JSON.parse(localStorage.getItem('mdd_signed')||'{}')||{}; }catch(e){ mddSignCache={}; }
+function mddSignSave(){
+  var now=Date.now(), keep={}, n=0;
+  Object.keys(mddSignCache).forEach(function(k){ if(mddSignCache[k][1]>now && n<1500){ keep[k]=mddSignCache[k]; n++; } });
+  mddSignCache=keep; try{ localStorage.setItem('mdd_signed',JSON.stringify(keep)); }catch(e){}
+}
+// Returns {path: signedUrl} for every path that could be signed (missing files are simply left out).
+async function mddSignedUrls(paths,ttl,noCache){
+  ttl=ttl||SIGN_TTL; var now=Date.now(), out={}, need=[];
+  paths.forEach(function(p){ if(!p||out[p]||need.indexOf(p)>=0) return; var c=!noCache&&mddSignCache[p]; if(c&&c[1]-now>3600e3) out[p]=c[0]; else need.push(p); });
+  if(need.length && currentUser && navigator.onLine!==false){
+    for(var i=0;i<need.length;i+=100){
+      try{
+        var res=await sb.storage.from(PHOTO_BUCKET).createSignedUrls(need.slice(i,i+100),ttl);
+        (res&&res.data||[]).forEach(function(d){ if(d&&d.signedUrl&&!d.error&&d.path){ out[d.path]=d.signedUrl; if(!noCache) mddSignCache[d.path]=[d.signedUrl,now+ttl*1000]; } });
+      }catch(e){}
+    }
+    if(!noCache) mddSignSave();
+  }
+  need.forEach(function(p){ if(!out[p]&&!noCache&&mddSignCache[p]) out[p]=mddSignCache[p][0]; }); // offline: use an older link if we have one
+  return out;
+}
+async function mddPhotoSrc(key){ var p=mddPhotoPath(key); if(!p) return key; var u=await mddSignedUrls([p]); return u[p]||mddPublicUrl(p); }
+function mddPhotoHtml(x){
+  var key=mddPhotoPath(x)||String(x), k=pbEsc(key);
+  return '<div class="entry-photo" data-ph="'+k+'" onclick="viewPhoto(this.dataset.ph)"><img data-ph="'+k+'" alt="journal photo" loading="lazy"></div>';
+}
+async function mddHydratePhotos(root){
+  var imgs=Array.prototype.slice.call((root||document).querySelectorAll('img[data-ph]:not([src])'));
+  if(!imgs.length) return;
+  var paths=imgs.map(function(i){ return mddPhotoPath(i.dataset.ph); }).filter(Boolean);
+  var urls=await mddSignedUrls(paths);
+  imgs.forEach(function(img){
+    var p=mddPhotoPath(img.dataset.ph);
+    if(!p){ img.src=img.dataset.ph; return; }
+    img.onerror=function(){ img.onerror=null; delete mddSignCache[p]; var pub=mddPublicUrl(p); if(pub&&img.src!==pub) img.src=pub; };
+    img.src=urls[p]||mddPublicUrl(p);
+  });
+}
+// High-res copy for print: only when the original is bigger than the 1600 px screen copy.
+function mddMakePrintCopy(file){
+  if(!PRINT_COPY.on) return Promise.resolve(null);
+  return compressImage(file,{maxDim:PRINT_COPY.maxDim,quality:PRINT_COPY.quality,jpegOnly:true,minSrc:1700}).catch(function(){ return null; });
+}
+async function mddUploadPhoto(file,printFile,path){
+  var r=await sb.storage.from(PHOTO_BUCKET).upload(path,file,{contentType:file.type});
+  if(r&&r.error) return {error:r.error};
+  if(printFile){ try{ await sb.storage.from(PHOTO_BUCKET).upload(mddPrintPath(path),printFile,{contentType:'image/jpeg'}); }catch(e){} } // best effort — print falls back to the screen copy
+  return {error:null,path:path};
+}
 
 // ── INSTALL / DOWNLOAD THE APP (same flow as Remix Arcade INSTALL-1) ──
 var mddInstallEv=null;
@@ -2761,10 +2858,13 @@ var PB_FORMATS={
 var PB_STYLES=[['band','Photo + band'],['framed','Framed photo'],['linen','Linen'],['scrap','Scrapbook'],['leather','Classic gold'],['minimal','Modern']];
 var PB_COLORS=['#5C3A1E','#F3EBDD','#A7B89A','#2E3A59','#6E2A35','#534AB7'];
 var PB_KRAFT='#EADFC8', PB_INK='#2b2118', PB_SOFT='#7a6a5a', PB_ACC='#8a5a2b', PB_RULE='#d8c8b0', PB_CREAM='#F6EEDC', PB_GOLD='#C9A45C';
-var PB={fmt:'a4',style:'band',color:'#5C3A1E',cover:null,title:'',titleEdited:false,subtitle:'',subEdited:false,
-        cropMarks:false,coverMode:'page',pick:'all',selected:{},from:'',to:'',inited:false,busy:false,urls:[]};
-try{ var pbSaved=JSON.parse(localStorage.getItem('mdd_print')||'{}'); ['fmt','style','color','cropMarks','coverMode'].forEach(function(k){ if(pbSaved[k]!==undefined) PB[k]=pbSaved[k]; }); if(!PB_FORMATS[PB.fmt]) PB.fmt='a4'; }catch(e){}
-function pbSave(){ try{ localStorage.setItem('mdd_print',JSON.stringify({fmt:PB.fmt,style:PB.style,color:PB.color,cropMarks:PB.cropMarks,coverMode:PB.coverMode})); }catch(e){} }
+var PB_PAPERS={'80':{name:'80 gsm plain paper',mm:0.10},'100':{name:'100 gsm thick paper',mm:0.12},'150':{name:'150 gsm photo paper',mm:0.16}};
+var PB={fmt:'a4',style:'band',color:'#5C3A1E',cover:null,back:null,inside:null,title:'',titleEdited:false,subtitle:'',subEdited:false,
+        blurb:'',plateName:'',insideF:'bookplate',insideB:'pattern',paper:'100',
+        cropMarks:false,pick:'all',selected:{},from:'',to:'',inited:false,busy:false,urls:[]};
+var PB_KEEP=['fmt','style','color','cropMarks','paper','insideF','insideB','blurb','plateName'];
+try{ var pbSaved=JSON.parse(localStorage.getItem('mdd_print')||'{}'); PB_KEEP.forEach(function(k){ if(pbSaved[k]!==undefined) PB[k]=pbSaved[k]; }); if(!PB_FORMATS[PB.fmt]) PB.fmt='a4'; if(!PB_PAPERS[PB.paper]) PB.paper='100'; }catch(e){}
+function pbSave(){ try{ var o={}; PB_KEEP.forEach(function(k){ o[k]=PB[k]; }); localStorage.setItem('mdd_print',JSON.stringify(o)); }catch(e){} }
 function pbEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 function pbYield(){ return new Promise(function(r){ setTimeout(r,0); }); }
 
@@ -2781,28 +2881,66 @@ function pbEnsureLib(){
   return pbLibP;
 }
 
-// Standard PDF fonts only know Western characters — drop emoji etc. so nothing prints as garbage.
-var PB_CP1252='€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+// Standard PDF fonts only know Western characters. Emoji are kept and drawn as small colour images
+// (DIARY-PRINT-2): while measuring/wrapping text each emoji is stood in for by '‰' (exactly 1 em wide in
+// Times & Helvetica), then the real emoji picture is placed in that gap. Other unknown characters are dropped.
+var PB_CP1252='€‚ƒ„…†‡ˆŠ‹ŒŽ‘’“”•–—˜™š›œžŸ', PB_PH='‰';
+var PB_EMOJI_RE=/(?:\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}[\uFE0F\uFE0E]?[\u{1F3FB}-\u{1F3FF}]?(?:\u200D\p{Extended_Pictographic}[\uFE0F\uFE0E]?[\u{1F3FB}-\u{1F3FF}]?)*)/gu;
+function pbIsTextSym(m){ return m==='©'||m==='®'||m==='™'||/^[#*0-9]$/.test(m); }
+function pbCleanPlain(s){ var o=''; for(var ch of s){ var c=ch.codePointAt(0); if(c===10||(c>=32&&c<127)||(c>=160&&c<=255)||PB_CP1252.indexOf(ch)>=0) o+=ch; } return o; }
 function pbClean(s){
-  s=String(s||'').replace(/\r/g,'').replace(/\t/g,' ');
-  var o=''; for(var ch of s){ var c=ch.codePointAt(0); if(c===10||(c>=32&&c<127)||(c>=160&&c<=255)||PB_CP1252.indexOf(ch)>=0) o+=ch; }
+  s=String(s||'').replace(/\r/g,'').replace(/\t/g,' ').replace(/‰/g,'%');
+  var o='', last=0;
+  s.replace(PB_EMOJI_RE,function(m,off){ o+=pbCleanPlain(s.slice(last,off))+(pbIsTextSym(m)?pbCleanPlain(m):m); last=off+m.length; return m; });
+  o+=pbCleanPlain(s.slice(last));
   return o.replace(/ {2,}/g,' ').replace(/ +([.,!?;:])/g,'$1').replace(/ *\n */g,'\n').trim();
+}
+function pbNoEmoji(s){ return String(s||'').replace(PB_EMOJI_RE,function(m){ return pbIsTextSym(m)?m:''; }).replace(/ {2,}/g,' ').trim(); }
+function pbTok(s){ var q=[]; var t=String(s||'').replace(PB_EMOJI_RE,function(m){ if(pbIsTextSym(m)) return m; q.push(m); return PB_PH; }); return {t:t,q:q}; }
+function pbPhCount(s){ return s.split(PB_PH).length-1; }
+var pbEmoCache={};
+function pbEmojiCanvas(e){
+  if(pbEmoCache[e]) return pbEmoCache[e];
+  var N=128, c=document.createElement('canvas'); c.width=c.height=N; var x=c.getContext('2d');
+  x.font=Math.round(N*0.84)+'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif';
+  x.textAlign='center'; x.textBaseline='alphabetic';
+  var m=x.measureText(e), a=m.actualBoundingBoxAscent||N*0.7, d=m.actualBoundingBoxDescent||N*0.1;
+  x.fillText(e,N/2,(N+a-d)/2);
+  pbEmoCache[e]={canvas:c,png:null,key:'em'+Array.from(e).map(function(ch){ return ch.codePointAt(0).toString(16); }).join('_')};
+  return pbEmoCache[e];
+}
+// where each text piece and each emoji goes on a line (mm), shared by the PDF and the on-screen preview
+function pbEmoLayout(op){
+  var segs=op.s.split(PB_PH), pw=pbTW(PB_PH,op.f,op.st,op.pt), ws=segs.map(function(g){ return g?pbTW(g,op.f,op.st,op.pt):0; });
+  var total=ws.reduce(function(a,b){return a+b;},0)+pw*(segs.length-1);
+  var x=op.al==='center'?op.x-total/2:op.al==='right'?op.x-total:op.x, parts=[], size=op.pt*PT*0.95;
+  segs.forEach(function(g,i){ if(g) parts.push({s:g,x:x}); x+=ws[i]; if(i<segs.length-1){ parts.push({e:op.em[i]||'',x:x+(pw-size)/2,y:op.y-size*0.8,size:size}); x+=pw; } });
+  return parts;
 }
 var pbMeasDoc=null;
 function pbM(){ if(!pbMeasDoc) pbMeasDoc=new window.jspdf.jsPDF({unit:'mm'}); return pbMeasDoc; }
 function pbWrap(t,f,st,pt,w){ var d=pbM(); d.setFont(f,st); d.setFontSize(pt); return d.splitTextToSize(t,w); }
 function pbTW(t,f,st,pt){ var d=pbM(); d.setFont(f,st); d.setFontSize(pt); return d.getTextWidth(t); }
-function pbFit(t,f,st,maxW,pt,maxLines){ while(pt>9){ var l=pbWrap(t,f,st,pt,maxW); if(l.length<=(maxLines||2)) return {lines:l,pt:pt}; pt-=1; } return {lines:pbWrap(t,f,st,pt,maxW),pt:pt}; }
+function pbFit(t,f,st,maxW,pt,maxLines){
+  var tk=pbTok(t), l;
+  while(pt>9){ l=pbWrap(tk.t,f,st,pt,maxW); if(l.length<=(maxLines||2)) break; pt-=1; }
+  if(pt<=9) l=pbWrap(tk.t,f,st,pt,maxW);
+  var q=tk.q.slice(); return {lines:l,pt:pt,em:l.map(function(x){ return q.splice(0,pbPhCount(x)); })};
+}
 function pbDate(d){ var x=new Date(d+'T12:00:00'); if(isNaN(x)) return {day:'',long:pbClean(d),month:''};
   return {day:x.toLocaleDateString('en-ZA',{weekday:'long'}),long:x.toLocaleDateString('en-ZA',{day:'numeric',month:'long',year:'numeric'}),month:x.toLocaleDateString('en-ZA',{month:'long',year:'numeric'})}; }
 function pbIsDark(hex){ var h=hex.replace('#',''); var r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16); return (r*299+g*587+b*114)/1000<140; }
 
 // ops
-function opText(p,s,x,y,f,st,pt,c,al){ if(s) p.ops.push({t:'text',s:s,x:x,y:y,f:f,st:st||'normal',pt:pt,c:c||PB_INK,al:al||'left'}); }
+function opText(p,s,x,y,f,st,pt,c,al,em,rot){
+  if(!s) return; if(em===undefined){ var tk=pbTok(s); s=tk.t; em=tk.q; }
+  p.ops.push({t:'text',s:s,x:x,y:y,f:f,st:st||'normal',pt:pt,c:c||PB_INK,al:al||'left',em:em&&em.length?em:null,rot:rot||0});
+}
+function opCircle(p,x,y,r,fill){ p.ops.push({t:'circle',x:x,y:y,r:r,fill:fill}); }
 function opRect(p,x,y,w,h,fill,stroke,lw,dash){ p.ops.push({t:'rect',x:x,y:y,w:w,h:h,fill:fill||null,stroke:stroke||null,lw:lw||0.3,dash:dash||null}); }
 function opLine(p,x1,y1,x2,y2,c,lw,dash){ p.ops.push({t:'line',x1:x1,y1:y1,x2:x2,y2:y2,c:c||PB_RULE,lw:lw||0.25,dash:dash||null}); }
 function opImg(p,ph,x,y,w,h,mode,extra){ var o={t:'img',ph:ph,x:x,y:y,w:w,h:h,mode:mode||'cover'}; if(extra) for(var k in extra) o[k]=extra[k]; p.ops.push(o); return o; }
-function opTitle(p,fit,cx,y,f,st,c,lhMul,al){ var lh=fit.pt*PT*(lhMul||1.18); fit.lines.forEach(function(l,i){ opText(p,l,cx,y+i*lh,f,st,fit.pt,c,al||'center'); }); return y+(fit.lines.length-1)*lh; }
+function opTitle(p,fit,cx,y,f,st,c,lhMul,al){ var lh=fit.pt*PT*(lhMul||1.18); fit.lines.forEach(function(l,i){ opText(p,l,cx,y+i*lh,f,st,fit.pt,c,al||'center',fit.em?fit.em[i]:undefined); }); return y+(fit.lines.length-1)*lh; }
 
 function PBBook(f,meta){ this.f=f; this.meta=meta; this.pages=[]; }
 PBBook.prototype.add=function(bg){ var p={ops:[],bg:bg||null,n:this.pages.length+1}; this.pages.push(p); return p; };
@@ -2816,12 +2954,12 @@ PBFlow.prototype.next=function(){ if(this.p && this.ci<this.cols.length-1){ this
 PBFlow.prototype.need=function(h){ if(!this.p){ this.page(); return; } if(this.y+h>this.col().bottom+0.01) this.next(); };
 PBFlow.prototype.gap=function(h){ if(this.p && this.y>this.col().top+0.01) this.y+=h; };
 PBFlow.prototype.para=function(text,f,st,pt,c,lhMul,al){
-  var lh=pt*PT*(lhMul||1.45), rest=text, guard=0;
+  var lh=pt*PT*(lhMul||1.45), tk=pbTok(text), rest=tk.t, q=tk.q, guard=0;
   while(rest && guard++<2000){
     this.need(lh);
     var col=this.col(), lines=pbWrap(rest,f,st,pt,col.w), i=0;
     while(i<lines.length && this.y+lh<=col.bottom+0.01){
-      opText(this.p,lines[i],al==='center'?col.x+col.w/2:col.x,this.y+lh*0.74,f,st,pt,c,al); this.y+=lh; i++;
+      opText(this.p,lines[i],al==='center'?col.x+col.w/2:col.x,this.y+lh*0.74,f,st,pt,c,al,q.splice(0,pbPhCount(lines[i]))); this.y+=lh; i++;
     }
     rest=lines.slice(i).join(' ');
     if(rest) this.next();
@@ -3026,6 +3164,92 @@ function pbCover(f,meta,ph,style,color){
   return p;
 }
 
+// ---- full cover set (DIARY-PRINT-2): back + spine + front wrap, inside covers ----
+var PB_INSIDE=[['plain','Plain colour'],['pattern','Dot pattern'],['bookplate','Bookplate (belongs to…)'],['photo','Photo']];
+var PB_SPINE_MIN_TEXT=6;
+function pbStyleColors(style,color){
+  var dark=pbIsDark(color);
+  if(style==='scrap') return {bg:PB_KRAFT,ink:dark?color:PB_INK,soft:PB_SOFT,dark:false};
+  if(style==='leather') return {bg:dark?color:'#3E2A1C',ink:PB_GOLD,soft:PB_GOLD,dark:true};
+  return {bg:color,ink:dark?PB_CREAM:PB_INK,soft:dark?'#E6DCCB':PB_SOFT,dark:dark};
+}
+// leaves = sheets of paper; each sheet carries 2 pages. Inside covers are printed on the cover itself.
+function pbSpineMm(interiorPages,paper){ var pp=PB_PAPERS[paper]||PB_PAPERS['100']; return Math.round(Math.ceil(interiorPages/2)*pp.mm*10)/10; }
+function pbBack(f,meta,o){
+  var p={ops:[],bg:null}, W=f.w, H=f.h, sc=pbStyleColors(o.style,o.color), small=Math.min(W,H)<160;
+  p.bg=o.style==='minimal'?'#FFFFFF':sc.bg;
+  var ink=o.style==='minimal'?PB_INK:sc.ink, soft=o.style==='minimal'?PB_SOFT:sc.soft;
+  if(o.style==='linen'){ opRect(p,10,10,W-20,H-20,null,ink,0.7); opRect(p,12.5,12.5,W-25,H-25,null,ink,0.25,[1.2,1.2]); }
+  if(o.style==='leather'){ opRect(p,8,8,W-16,H-16,null,PB_GOLD,0.9); opRect(p,10.5,10.5,W-21,H-21,null,PB_GOLD,0.3); }
+  if(o.style==='minimal') opRect(p,W*0.1,H*0.1,18,1.8,pbIsDark(o.color)?o.color:PB_ACC);
+  var y=H*0.2;
+  if(o.ph2){
+    var bx={x:W*0.18,y:H*0.1,w:W*0.64,h:H*0.38};
+    if(o.style==='scrap') pbPolaroid(p,o.ph2,bx,2.5,PB_KRAFT,1);
+    else { var fw=bx.w, fh=fw/o.ph2.ar; if(fh>bx.h){ fh=bx.h; fw=fh*o.ph2.ar; } var fx=(W-fw)/2, fy=bx.y+(bx.h-fh)/2, mat=o.style==='minimal'?0:4;
+      if(mat) opRect(p,fx-mat,fy-mat,fw+2*mat,fh+2*mat,'#FFFFFF'); opImg(p,o.ph2,fx,fy,fw,fh,'cover'); }
+    y=H*0.56;
+  }
+  var blurb=pbClean(o.blurb||'');
+  if(blurb){
+    var pt=small?11:13.5, lh=pt*PT*1.5, tk=pbTok(blurb.replace(/\n+/g,' ')), lines=pbWrap(tk.t,'times','italic',pt,W*0.66), q=tk.q.slice();
+    lines.slice(0,o.ph2?9:16).forEach(function(l,i){ opText(p,l,W/2,y+i*lh,'times','italic',pt,ink,'center',q.splice(0,pbPhCount(l))); });
+  } else if(!o.ph2){
+    var fit=pbFit(meta.title,'times','bold',W*0.6,small?16:20,2); opTitle(p,fit,W/2,H*0.42,'times','bold',ink);
+  }
+  opText(p,'Made with My Digital Diary',W/2,H-16,'helvetica','normal',7,soft,'center');
+  return p;
+}
+function pbInside(f,kind,o,side){
+  var p={ops:[],bg:null,noNum:true}, W=f.w, H=f.h, B=PB_BLEED, sc=pbStyleColors(o.style,o.color);
+  if(kind==='photo' && (o.phIn||o.ph)){ opImg(p,o.phIn||o.ph,-B,-B,W+2*B,H+2*B,'cover'); return p; }
+  if(kind==='pattern'){
+    p.bg=PB_CREAM; var dot=sc.dark?sc.bg:(o.style==='scrap'?PB_ACC:o.color), gap=8, row=0;
+    for(var yy=-B+3;yy<H+B;yy+=gap*0.866){ for(var xx=-B+3+(row%2?gap/2:0);xx<W+B;xx+=gap) opCircle(p,xx,yy,0.9,dot); row++; }
+    return p;
+  }
+  if(kind==='bookplate' && side==='front'){
+    p.bg=PB_CREAM; var cw=Math.min(W*0.66,110), ch=cw*0.56, cx=(W-cw)/2, cy=H*0.32, acc=sc.dark?sc.bg:PB_ACC;
+    opRect(p,cx,cy,cw,ch,'#FFFDF8',acc,0.8); opRect(p,cx+3,cy+3,cw-6,ch-6,null,acc,0.3,[1,1]);
+    opText(p,'This diary belongs to',W/2,cy+ch*0.32,'times','italic',13,PB_INK,'center');
+    var nm=pbClean(o.plateName||'');
+    if(nm) opText(p,nm,W/2,cy+ch*0.62,'times','bold',18,PB_INK,'center');
+    else opLine(p,cx+cw*0.15,cy+ch*0.66,cx+cw*0.85,cy+ch*0.66,PB_INK,0.3);
+    opText(p,'•',W/2,cy+ch*0.86,'times','normal',10,acc,'center');
+    return p;
+  }
+  p.bg=kind==='bookplate'?PB_CREAM:sc.bg; // bookplate only makes sense up front; the back gets the matching cream
+  return p;
+}
+function pbShift(ops,dx){
+  return ops.map(function(op){ var o={}; for(var k in op) o[k]=op[k];
+    if(o.t==='line'){ o.x1+=dx; o.x2+=dx; } else o.x+=dx; return o; });
+}
+// One page: back | spine | front. Trim = 2×book width + spine; the PDF adds 3 mm bleed all round.
+function pbWrapPage(f,meta,o,spine){
+  var W=f.w, H=f.h, B=PB_BLEED, wf={id:f.id,w:2*W+spine,h:H,spine:spine}, p={ops:[],bg:null};
+  var back=pbBack(f,meta,o), front=pbCover(f,meta,o.ph,o.style,o.color), sc=pbStyleColors(o.style,o.color);
+  if(back.bg) opRect(p,-B,-B,W+B+0.01,H+2*B,back.bg);
+  p.ops=p.ops.concat(back.ops);
+  if(front.bg) opRect(p,W+spine,-B,W+B,H+2*B,front.bg);
+  p.ops=p.ops.concat(pbShift(front.ops,W+spine));
+  // spine painted last so nothing from the covers' bleed spills onto it
+  var sbg=o.style==='minimal'?(pbIsDark(o.color)?o.color:'#FFFFFF'):sc.bg, sink=o.style==='minimal'?(pbIsDark(o.color)?PB_CREAM:PB_INK):sc.ink;
+  opRect(p,W,-B,spine,H+2*B,sbg);
+  wf.spineText=false;
+  var txt=pbNoEmoji(meta.title)+(meta.subtitle?'   ·   '+pbNoEmoji(meta.subtitle):'');
+  if(spine>=PB_SPINE_MIN_TEXT){
+    var pt=Math.min(16,spine*0.55/PT), maxL=H-30;
+    if(pbTW(txt,'times','bold',pt)>maxL) txt=pbNoEmoji(meta.title);
+    while(pt>6 && pbTW(txt,'times','bold',pt)>maxL) pt-=0.5;
+    var tw=pbTW(txt,'times','bold',pt), cx=W+spine/2;
+    // rotated 90° clockwise: reads top-to-bottom, letter tops face the front cover
+    opText(p,txt,cx-pt*PT*0.34,(H-tw)/2,'times','bold',pt,sink,'left',null,-90);
+    wf.spineText=true;
+  }
+  return {page:p,f:wf};
+}
+
 // ---- images ----
 function pbBitmap(blob){
   if(window.createImageBitmap) return createImageBitmap(blob).catch(function(){ return pbImgEl(blob); });
@@ -3094,8 +3318,13 @@ async function pbDrawPage(canvas,page,f,scale){
     } else if(op.t==='line'){
       ctx.strokeStyle=op.c; ctx.lineWidth=Math.max(0.5,op.lw*scale); ctx.setLineDash(op.dash?op.dash.map(function(v){return v*scale;}):[]);
       ctx.beginPath(); ctx.moveTo(op.x1*scale,op.y1*scale); ctx.lineTo(op.x2*scale,op.y2*scale); ctx.stroke(); ctx.setLineDash([]);
+    } else if(op.t==='circle'){
+      ctx.fillStyle=op.fill; ctx.beginPath(); ctx.arc(op.x*scale,op.y*scale,Math.max(0.4,op.r*scale),0,Math.PI*2); ctx.fill();
     } else if(op.t==='text'){
-      ctx.fillStyle=op.c; ctx.font=pbCssFont(op,op.pt*PT*scale); ctx.textAlign=op.al; ctx.textBaseline='alphabetic'; ctx.fillText(op.s,op.x*scale,op.y*scale);
+      ctx.fillStyle=op.c; ctx.font=pbCssFont(op,op.pt*PT*scale); ctx.textBaseline='alphabetic';
+      if(op.rot){ ctx.save(); ctx.translate(op.x*scale,op.y*scale); ctx.rotate(-op.rot*Math.PI/180); ctx.textAlign='left'; ctx.fillText(op.s,0,0); ctx.restore(); }
+      else if(op.em){ ctx.textAlign='left'; pbEmoLayout(op).forEach(function(q){ if(q.e) ctx.drawImage(pbEmojiCanvas(q.e).canvas,q.x*scale,q.y*scale,q.size*scale,q.size*scale); else ctx.fillText(q.s,q.x*scale,op.y*scale); }); }
+      else { ctx.textAlign=op.al; ctx.fillText(op.s,op.x*scale,op.y*scale); }
     } else if(op.t==='img'){
       var src=await pbPreviewSrc(op.ph), r=pbBake(op,scale*25.4*Math.min(2,window.devicePixelRatio||1),src);
       ctx.drawImage(r.canvas,op.x*scale,op.y*scale,op.w*scale,op.h*scale); r.canvas.width=0;
@@ -3111,7 +3340,7 @@ async function pbPdf(pages,f,opts,onProg){
   var PW=+(f.w+2*off).toFixed(3), PH=+(f.h+2*off).toFixed(3), orient=PW>PH?'l':'p';
   var doc=new jsPDF({unit:'mm',format:[PW,PH],orientation:orient,compress:true});
   doc.setProperties({title:opts.title||'My Diary',creator:'My Digital Diary (DIARY-PRINT-1)'});
-  var stats={minDpi:Infinity,photos:0,failed:0}, imgN=0;
+  var stats={minDpi:Infinity,photos:0,failed:0,emoji:0}, imgN=0;
   for(var i=0;i<pages.length;i++){
     var page=pages[i];
     if(i) doc.addPage([PW,PH],orient);
@@ -3124,13 +3353,23 @@ async function pbPdf(pages,f,opts,onProg){
         if(op.stroke){ doc.setDrawColor(op.stroke); doc.setLineWidth(op.lw); }
         doc.rect(op.x+off,op.y+off,op.w,op.h,op.fill&&op.stroke?'FD':op.fill?'F':'S');
         if(op.dash) doc.setLineDashPattern([],0);
+      } else if(op.t==='circle'){
+        doc.setFillColor(op.fill); doc.circle(op.x+off,op.y+off,op.r,'F');
       } else if(op.t==='line'){
         if(op.dash) doc.setLineDashPattern(op.dash,0);
         doc.setDrawColor(op.c); doc.setLineWidth(op.lw); doc.line(op.x1+off,op.y1+off,op.x2+off,op.y2+off);
         if(op.dash) doc.setLineDashPattern([],0);
       } else if(op.t==='text'){
         doc.setFont(op.f,op.st); doc.setFontSize(op.pt); doc.setTextColor(op.c);
-        doc.text(op.s,op.x+off,op.y+off,{align:op.al,baseline:'alphabetic'});
+        if(op.rot) doc.text(op.s,op.x+off,op.y+off,{angle:op.rot,baseline:'alphabetic'});
+        else if(op.em){
+          pbEmoLayout(op).forEach(function(q){
+            if(!q.e){ doc.text(q.s,q.x+off,op.y+off,{baseline:'alphabetic'}); return; }
+            var ec=pbEmojiCanvas(q.e); if(!ec.png) ec.png=ec.canvas.toDataURL('image/png');
+            doc.addImage(ec.png,'PNG',q.x+off,q.y+off,q.size,q.size,ec.key,'FAST'); stats.emoji++;
+          });
+        }
+        else doc.text(op.s,op.x+off,op.y+off,{align:op.al,baseline:'alphabetic'});
       } else if(op.t==='img'){
         var src=null;
         try{ src=op.ph.blob?await pbBitmap(op.ph.blob):pbPlaceholder(op.ph); }catch(e){ stats.failed++; }
@@ -3141,19 +3380,20 @@ async function pbPdf(pages,f,opts,onProg){
         }
       }
     }
-    if(opts.cropMarks) pbCropMarks(doc,f,off);
+    if(opts.cropMarks) pbCropMarks(doc,f,off,opts.spine);
     if(onProg) onProg(i+1,pages.length);
     await pbYield();
   }
   return {blob:doc.output('blob'),stats:stats,size:[PW,PH],pages:pages.length};
 }
-function pbCropMarks(doc,f,off){
+function pbCropMarks(doc,f,off,spine){
   var g=PB_BLEED+2, L=6;
   doc.setDrawColor('#000000'); doc.setLineWidth(0.12);
   [[0,0,-1,-1],[f.w,0,1,-1],[0,f.h,-1,1],[f.w,f.h,1,1]].forEach(function(k){
     var x=k[0]+off, y=k[1]+off;
     doc.line(x+k[2]*g,y,x+k[2]*(g+L),y); doc.line(x,y+k[3]*g,x,y+k[3]*(g+L));
   });
+  if(spine) spine.forEach(function(sx){ var x=sx+off; doc.line(x,off-g,x,off-g-L); doc.line(x,off+f.h+g,x,off+f.h+g+L); }); // spine fold marks, outside the bleed
 }
 
 // ---- data ----
@@ -3168,26 +3408,26 @@ function pbSelectedEntries(){
     return true;
   });
 }
-function pbPathFromUrl(u){ var m=String(u||'').match(/\/diary-photos\/(.+?)(\?|$)/); return m?decodeURIComponent(m[1]):null; }
 // Downloads each photo once (one at a time), from a short-lived signed link to the original upload.
+// Downloads each photo once (one at a time) through short-lived signed links. Uses the high-res
+// print copy ("….print.jpg") when one exists, otherwise the normal screen copy.
 async function pbFetchPhotos(entries,onProg){
-  var urls=[]; entries.forEach(function(e){ (e.photos||[]).forEach(function(u){ if(typeof u==='string' && urls.indexOf(u)<0) urls.push(u); }); });
-  var signed={}, paths=urls.map(pbPathFromUrl).filter(Boolean);
-  if(paths.length){
-    try{ var res=await sb.storage.from('diary-photos').createSignedUrls(paths,900);
-      (res.data||[]).forEach(function(d){ if(d&&d.signedUrl&&d.path) signed[d.path]=d.signedUrl; }); }catch(e){}
+  var keys=[]; entries.forEach(function(e){ (e.photos||[]).forEach(function(u){ if(typeof u==='string' && keys.indexOf(u)<0) keys.push(u); }); });
+  var paths=keys.map(mddPhotoPath), want=[];
+  paths.forEach(function(p){ if(p){ want.push(mddPrintPath(p)); want.push(p); } });
+  var signed=want.length?await mddSignedUrls(want,1800,true):{};
+  var out={}, failed=0, noPrint=0;
+  for(var i=0;i<keys.length;i++){
+    var u=keys[i], p=paths[i], tries=p?[signed[mddPrintPath(p)],signed[p],mddPublicUrl(p)]:[u], got=null;
+    for(var t=0;t<tries.length && !got;t++){
+      if(!tries[t]) continue;
+      try{ var r=await fetch(tries[t]); if(!r.ok) continue; var blob=await r.blob(), bmp=await pbBitmap(blob), w=pbSrcW(bmp), h=pbSrcH(bmp); if(bmp.close) bmp.close();
+        got={blob:blob,w:w,h:h,ar:w/h,print:p&&t===0}; }catch(e){}
+    }
+    if(got){ out[u]=got; if(!got.print) noPrint++; } else failed++;
+    if(onProg) onProg(i+1,keys.length);
   }
-  var out={}, failed=0;
-  for(var i=0;i<urls.length;i++){
-    var u=urls[i], p=pbPathFromUrl(u);
-    try{
-      var r=await fetch((p&&signed[p])||u); if(!r.ok) throw new Error('http '+r.status);
-      var blob=await r.blob(), bmp=await pbBitmap(blob), w=pbSrcW(bmp), h=pbSrcH(bmp); if(bmp.close) bmp.close();
-      out[u]={blob:blob,w:w,h:h,ar:w/h};
-    }catch(e){ failed++; }
-    if(onProg) onProg(i+1,urls.length);
-  }
-  return {map:out,failed:failed,total:urls.length};
+  return {map:out,failed:failed,total:keys.length,noPrint:noPrint};
 }
 function pbDefaultName(){
   var n=((document.getElementById('cust-name')||{}).value||'').trim().split(/\s+/)[0];
@@ -3239,29 +3479,55 @@ function pbStyleChips(){
 function pbSelFmt(k){ PB.fmt=k; pbSave(); document.querySelectorAll('.pb-fmt').forEach(function(b){ b.classList.toggle('sel',b.dataset.fmt===k); }); pbLiveCover(); pbClearOut(); }
 function pbSelStyle(s){ PB.style=s; pbSave(); pbStyleChips(); pbLiveCover(); pbClearOut(); }
 function pbSelColor(c){ PB.color=c; pbSave(); pbStyleChips(); pbLiveCover(); pbClearOut(); }
-function pbCoverPick(){ document.getElementById('pb-cover-file').click(); }
-async function pbCoverChosen(input){
+function pbCoverPick(slot){ document.getElementById('pb-'+(slot||'cover')+'-file').click(); }
+async function pbCoverChosen(input,slot){
+  slot=slot||'cover';
   var file=input.files&&input.files[0]; input.value=''; if(!file) return;
   try{ var bmp=await pbBitmap(file), w=pbSrcW(bmp), h=pbSrcH(bmp); if(bmp.close) bmp.close();
-    PB.cover={blob:file,w:w,h:h,ar:w/h};
-    document.getElementById('pb-cover-btn').textContent='🖼️ Change cover photo';
-    document.getElementById('pb-cover-clear').style.display='';
+    PB[slot]={blob:file,w:w,h:h,ar:w/h};
+    var b=document.getElementById('pb-'+slot+'-btn'); if(b) b.textContent=b.dataset.change;
+    var c=document.getElementById('pb-'+slot+'-clear'); if(c) c.style.display='';
     pbLiveCover(); pbClearOut();
   }catch(e){ showToast('That photo could not be opened — try another one'); }
 }
-function pbCoverClear(){ PB.cover=null; document.getElementById('pb-cover-btn').textContent='🖼️ Add a cover photo'; document.getElementById('pb-cover-clear').style.display='none'; pbLiveCover(); }
+function pbCoverClear(slot){
+  slot=slot||'cover'; PB[slot]=null;
+  var b=document.getElementById('pb-'+slot+'-btn'); if(b) b.textContent=b.dataset.add;
+  var c=document.getElementById('pb-'+slot+'-clear'); if(c) c.style.display='none';
+  pbLiveCover(); pbClearOut();
+}
 function pbTitleInput(el){ PB.title=el.value; PB.titleEdited=true; pbLiveCover(); pbClearOut(); }
 function pbSubInput(el){ PB.subtitle=el.value; PB.subEdited=true; pbLiveCover(); pbClearOut(); }
+function pbCoverOpts(){ return {ph:PB.cover,ph2:PB.back,phIn:PB.inside,style:PB.style,color:PB.color,blurb:PB.blurb,plateName:PB.plateName}; }
+// Page count for the spine: real layout of the chosen entries (photos counted as 4:3 until downloaded).
+var pbEstKey='', pbEstPages=0;
+function pbEstimatePages(){
+  var sel=pbSelectedEntries(), key=PB.fmt+'|'+sel.length+'|'+(sel[0]&&sel[0].id)+'|'+(sel.length&&sel[sel.length-1].id)+'|'+PB.title;
+  if(key===pbEstKey) return pbEstPages;
+  var f=PB_FORMATS[PB.fmt], ph={ar:1.33,color:'#ccc'};
+  var book=pbLayout(f,sel.map(function(e){ return {date:e.date,time:e.time,topic:e.topic,text:e.text||'',photos:(e.photos||[]).map(function(){ return ph; })}; }),pbMeta());
+  pbEstKey=key; pbEstPages=book.pages.length; return pbEstPages;
+}
+function pbSpineNote(pages,spine,exact){
+  var el=document.getElementById('pb-spine-info'); if(!el) return;
+  el.innerHTML=(exact?'':'≈ ')+pages+' inside pages on '+PB_PAPERS[PB.paper].name+' → spine <b>'+spine.toFixed(1)+' mm</b>'+
+    (spine<PB_SPINE_MIN_TEXT?'<br><span style="color:#8a5a00">Spine is thinner than '+PB_SPINE_MIN_TEXT+' mm, so no text is printed on it (it would not fit).</span>':' — your title is printed on it.');
+}
 function pbLiveCover(){
   clearTimeout(pbCoverTimer);
   pbCoverTimer=setTimeout(async function(){
     try{ await pbEnsureLib(); }catch(e){ document.getElementById('pb-cover-note').textContent='Preview needs internet the first time.'; return; }
-    var f=PB_FORMATS[PB.fmt], cv=document.getElementById('pb-cover-canvas'), wrap=document.getElementById('pb-cover-wrap');
-    var maxW=150, maxH=200, k=Math.min(maxW/f.w,maxH/f.h), dpr=Math.min(2,window.devicePixelRatio||1);
-    await pbDrawPage(cv,pbCover(f,pbMeta(),PB.cover,PB.style,PB.color),f,k*dpr);
-    cv.style.width=(f.w*k)+'px'; cv.style.height=(f.h*k)+'px';
-    if(wrap) wrap.style.minHeight=(f.h*k)+'px';
-  },120);
+    var f=PB_FORMATS[PB.fmt], pages=pbEstimatePages(), spine=pbSpineMm(pages,PB.paper);
+    pbSpineNote(pages,spine,false);
+    var o=pbCoverOpts(), w=pbWrapPage(f,pbMeta(),o,spine), cv=document.getElementById('pb-wrap-canvas'), box=document.getElementById('pb-wrap-box');
+    var maxW=Math.max(200,(box&&box.clientWidth)||320), k=maxW/w.f.w, dpr=Math.min(2,window.devicePixelRatio||1);
+    await pbDrawPage(cv,w.page,w.f,k*dpr); cv.style.width=(w.f.w*k)+'px'; cv.style.height=(w.f.h*k)+'px';
+    var lab=document.getElementById('pb-wrap-labels'); if(lab) lab.style.gridTemplateColumns=f.w+'fr '+Math.max(spine,0.01)+'fr '+f.w+'fr';
+    var kk=Math.min(70/f.w,90/f.h);
+    await pbDrawPage(document.getElementById('pb-inf-canvas'),pbInside(f,PB.insideF,o,'front'),f,kk*dpr);
+    await pbDrawPage(document.getElementById('pb-inb-canvas'),pbInside(f,PB.insideB,o,'back'),f,kk*dpr);
+    ['pb-inf-canvas','pb-inb-canvas'].forEach(function(id){ var c=document.getElementById(id); c.style.width=(f.w*kk)+'px'; c.style.height=(f.h*kk)+'px'; });
+  },150);
 }
 function pbRefreshEntries(){
   var all=pbAllEntries(), fromEl=document.getElementById('pb-from'), toEl=document.getElementById('pb-to');
@@ -3294,7 +3560,14 @@ function pbPick(mode){
   pbRefreshEntries(); pbClearOut();
 }
 function pbDates(){ PB.from=document.getElementById('pb-from').value; PB.to=document.getElementById('pb-to').value; if(PB.from&&PB.to&&PB.from>PB.to){ var t=PB.from; PB.from=PB.to; PB.to=t; } pbRefreshEntries(); pbLiveCover(); pbClearOut(); }
-function pbOpt(){ PB.cropMarks=document.getElementById('pb-crop').checked; PB.coverMode=document.querySelector('input[name="pb-covermode"]:checked').value; pbSave(); pbClearOut(); }
+function pbOpt(){
+  PB.cropMarks=document.getElementById('pb-crop').checked;
+  PB.paper=document.getElementById('pb-paper').value;
+  PB.insideF=document.getElementById('pb-insf').value; PB.insideB=document.getElementById('pb-insb').value;
+  PB.blurb=document.getElementById('pb-blurb').value; PB.plateName=document.getElementById('pb-plate').value;
+  document.getElementById('pb-plate-row').style.display=PB.insideF==='bookplate'?'':'none';
+  pbSave(); pbLiveCover(); pbClearOut();
+}
 function pbUpdatePriceUI(){
   var b=document.getElementById('pb-dl-btn'); if(!b) return;
   b.textContent=pbIsUnlocked()?'⬇ Download print PDF':'⬇ Download print PDF — $'+PRINT_PRICE.usd+' (≈R'+PRINT_PRICE.zar+')';
@@ -3313,7 +3586,13 @@ function initPrintSection(){
   if(!PB.inited){
     PB.inited=true; pbFormatTiles(); pbStyleChips();
     document.getElementById('pb-crop').checked=!!PB.cropMarks;
-    var cm=document.querySelector('input[name="pb-covermode"][value="'+PB.coverMode+'"]'); if(cm) cm.checked=true;
+    document.getElementById('pb-paper').innerHTML=Object.keys(PB_PAPERS).map(function(k){ return '<option value="'+k+'">'+PB_PAPERS[k].name+' (≈'+PB_PAPERS[k].mm.toFixed(2)+' mm per sheet)</option>'; }).join('');
+    document.getElementById('pb-paper').value=PB.paper;
+    ['pb-insf','pb-insb'].forEach(function(id){ document.getElementById(id).innerHTML=PB_INSIDE.filter(function(x){ return id==='pb-insf'||x[0]!=='bookplate'; }).map(function(x){ return '<option value="'+x[0]+'">'+x[1]+'</option>'; }).join(''); });
+    if(PB.insideB==='bookplate') PB.insideB='plain';
+    document.getElementById('pb-insf').value=PB.insideF; document.getElementById('pb-insb').value=PB.insideB;
+    document.getElementById('pb-blurb').value=PB.blurb||''; document.getElementById('pb-plate').value=PB.plateName||'';
+    document.getElementById('pb-plate-row').style.display=PB.insideF==='bookplate'?'':'none';
     pbRenderThumbs();
   }
   pbRefreshEntries(); pbUpdatePriceUI(); pbLiveCover();
@@ -3326,15 +3605,17 @@ async function pbPreview(){
     pbProgress('Loading the book maker…',0.05); await pbEnsureLib();
     var some=sel.slice(0,4);
     var ph=await pbFetchPhotos(some,function(i,n){ pbProgress('Fetching photos '+i+' of '+n+'…',0.1+0.6*i/n); });
-    var f=PB_FORMATS[PB.fmt], meta=pbMeta(), book=pbLayout(f,some.map(function(e){ return pbEntryModel(e,ph.map); }),meta);
-    var pages=[pbCover(f,meta,PB.cover,PB.style,PB.color)].concat(book.pages.slice(0,6));
-    pbClearOut(); out.innerHTML='<div class="pb-out-title">Free preview — first pages of your '+pbEsc(f.name)+'</div><div class="pb-strip" id="pb-strip"></div>';
+    var f=PB_FORMATS[PB.fmt], meta=pbMeta(), o=pbCoverOpts(), book=pbLayout(f,some.map(function(e){ return pbEntryModel(e,ph.map); }),meta);
+    var spine=pbSpineMm(pbEstimatePages(),PB.paper), wrap=pbWrapPage(f,meta,o,spine);
+    var items=[[wrap.page,wrap.f,'Cover: back · spine · front'],[pbInside(f,PB.insideF,o,'front'),f,'Inside front cover']];
+    book.pages.slice(0,6).forEach(function(p,i){ items.push([p,f,i===0?'Title page':'Page '+(i+1)]); });
+    pbClearOut(); out.innerHTML='<div class="pb-out-title">Free preview — cover and first pages of your '+pbEsc(f.name)+'</div><div class="pb-strip" id="pb-strip"></div>';
     var strip=document.getElementById('pb-strip');
-    for(var i=0;i<pages.length;i++){
-      pbProgress('Drawing page '+(i+1)+' of '+pages.length+'…',0.7+0.3*(i+1)/pages.length);
-      var d=document.createElement('div'); d.className='pb-pg'; var cv=document.createElement('canvas'); var hp=230, sc=hp/f.h*Math.min(2,window.devicePixelRatio||1);
-      await pbDrawPage(cv,pages[i],f,sc); cv.style.height=hp+'px'; cv.style.width=(hp*f.w/f.h)+'px';
-      d.appendChild(cv); var l=document.createElement('div'); l.className='pb-pg-l'; l.textContent=i===0?'Cover':i===1?'Title page':'Page '+i; d.appendChild(l); strip.appendChild(d);
+    for(var i=0;i<items.length;i++){
+      pbProgress('Drawing page '+(i+1)+' of '+items.length+'…',0.7+0.3*(i+1)/items.length);
+      var it=items[i], d=document.createElement('div'); d.className='pb-pg'; var cv=document.createElement('canvas'); var hp=230, sc=hp/it[1].h*Math.min(2,window.devicePixelRatio||1);
+      await pbDrawPage(cv,it[0],it[1],sc); cv.style.height=hp+'px'; cv.style.width=(hp*it[1].w/it[1].h)+'px';
+      d.appendChild(cv); var l=document.createElement('div'); l.className='pb-pg-l'; l.textContent=it[2]; d.appendChild(l); strip.appendChild(d);
       await pbYield();
     }
     if(ph.failed) out.insertAdjacentHTML('beforeend','<p class="pb-warn">⚠️ '+ph.failed+' photo(s) could not be loaded and were left out.</p>');
@@ -3360,24 +3641,24 @@ async function pbMakePdf(){
   try{
     pbProgress('Loading the book maker…',0.02); await pbEnsureLib();
     var ph=await pbFetchPhotos(sel,function(i,n){ pbProgress('Fetching photos '+i+' of '+n+'…',0.03+0.32*i/n); });
-    var f=PB_FORMATS[PB.fmt], meta=pbMeta();
+    var f=PB_FORMATS[PB.fmt], meta=pbMeta(), o=pbCoverOpts();
     pbProgress('Laying out pages…',0.36); await pbYield();
-    var book=pbLayout(f,sel.map(function(e){ return pbEntryModel(e,ph.map); }),meta), cover=pbCover(f,meta,PB.cover,PB.style,PB.color);
-    var opts={cropMarks:PB.cropMarks,title:meta.title}, files=[], base='my-diary-'+f.id+'-'+localDateStr(new Date());
-    if(PB.coverMode==='page'){
-      var all=[cover].concat(book.pages);
-      var r=await pbPdf(all,f,opts,function(i,n){ pbProgress('Making page '+i+' of '+n+'…',0.38+0.6*i/n); });
-      files.push({name:base+'.pdf',label:'⬇ Download your book PDF',res:r});
-    } else {
-      var rc=await pbPdf([cover],f,opts,function(){ pbProgress('Making the cover…',0.4); });
-      var rp=await pbPdf(book.pages,f,opts,function(i,n){ pbProgress('Making page '+i+' of '+n+'…',0.42+0.56*i/n); });
-      files.push({name:base+'-cover.pdf',label:'⬇ Cover PDF',res:rc}); files.push({name:base+'-pages.pdf',label:'⬇ Pages PDF',res:rp});
-    }
-    var stats=files[files.length-1].res.stats, sz=files[0].res.size;
-    var html='<div class="pb-done">✅ Your print-ready PDF is ready — '+files.map(function(x){ return x.res.pages; }).reduce(function(a,b){return a+b;},0)+' pages, '+sz[0].toFixed(1)+' × '+sz[1].toFixed(1)+' mm per page (incl. 3 mm bleed'+(PB.cropMarks?' + crop marks':'')+').</div>';
+    var book=pbLayout(f,sel.map(function(e){ return pbEntryModel(e,ph.map); }),meta);
+    var nPages=book.pages.length, spine=pbSpineMm(nPages,PB.paper), wrap=pbWrapPage(f,meta,o,spine);
+    var base='my-diary-'+f.id+'-'+localDateStr(new Date()), files=[];
+    var rc=await pbPdf([wrap.page],wrap.f,{cropMarks:PB.cropMarks,title:meta.title+' — cover',spine:[f.w,f.w+spine]},function(){ pbProgress('Making the cover…',0.4); });
+    var inner=[pbInside(f,PB.insideF,o,'front')].concat(book.pages,[pbInside(f,PB.insideB,o,'back')]);
+    var rp=await pbPdf(inner,f,{cropMarks:PB.cropMarks,title:meta.title},function(i,n){ pbProgress('Making page '+i+' of '+n+'…',0.42+0.56*i/n); });
+    files.push({name:base+'-cover-wrap.pdf',label:'⬇ Cover PDF (back + spine + front)',res:rc});
+    files.push({name:base+'-pages.pdf',label:'⬇ Inside pages PDF',res:rp});
+    window.__pb.last={spine:spine,pages:nPages,spineText:wrap.f.spineText,coverSize:rc.size,pageSize:rp.size,stats:rp.stats,noPrint:ph.noPrint};
+    pbSpineNote(nPages,spine,true);
+    var html='<div class="pb-done">✅ Your print files are ready.<br><b>Cover:</b> '+rc.size[0].toFixed(1)+' × '+rc.size[1].toFixed(1)+' mm (back + '+spine.toFixed(1)+' mm spine + front, incl. 3 mm bleed'+(PB.cropMarks?' + marks':'')+')'+(wrap.f.spineText?'':' — spine too thin for text')+
+      '.<br><b>Inside:</b> '+rp.pages+' pages of '+rp.size[0].toFixed(1)+' × '+rp.size[1].toFixed(1)+' mm — page 1 is the inside front cover, the last page the inside back cover.</div>';
     files.forEach(function(x){ var u=URL.createObjectURL(x.res.blob); PB.urls.push(u); html+='<a class="pb-dl" href="'+u+'" download="'+x.name+'">'+x.label+' ('+(x.res.blob.size/1048576).toFixed(1)+' MB)</a>'; });
     if(ph.failed) html+='<p class="pb-warn">⚠️ '+ph.failed+' photo(s) could not be downloaded and were left out. Check your connection and try again.</p>';
-    if(stats.minDpi<200 && isFinite(stats.minDpi)) html+='<p class="pb-warn">ℹ️ Some photos print at about '+Math.round(stats.minDpi)+' dpi (diary photos are saved at phone-screen size). They\'ll look fine at normal viewing distance, but very large photos may look slightly soft.</p>';
+    var st=rp.stats;
+    if(st.minDpi<200 && isFinite(st.minDpi)) html+='<p class="pb-warn">ℹ️ Some photos print at about '+Math.round(st.minDpi)+' dpi'+(ph.noPrint?' ('+ph.noPrint+' older photo'+(ph.noPrint===1?' has':'s have')+' no high-res print copy — only photos added from now on keep one)':'')+'. They\'ll look fine at normal viewing distance, but very large photos may look slightly soft.</p>';
     out.innerHTML=html;
     var first=out.querySelector('a.pb-dl'); if(first) first.click();
   }catch(e){ console.error(e); showToast(e.message||'Something went wrong making the PDF — please try again'); out.innerHTML='<p class="pb-warn">Something went wrong making the PDF. Close other apps and try again, or pick fewer entries.</p>'; }
