@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Digital Journal">
-<meta name="build" content="DIARY-PRINT-2">
+<meta name="build" content="DIARY-PRINT-3">
 <meta name="theme-color" content="#534AB7">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -867,10 +867,10 @@ const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 // Empty link = that button says "Payments coming soon". No secrets ever go in this file:
 // the Payhip product secret keys live only in Supabase → Edge Functions → Secrets (redeem-diary).
 const PAYHIP_LINKS={
-  print:'',   // "Print-ready diary PDF" — $2 one-off
-  tier1:'',   // "Photo Plan 1 — 30 days" — $1.99
-  tier2:'',   // "Photo Plan 2 — 30 days" — $3.99
-  tier3:''    // "Photo Plan 3 — 30 days" — $5.99
+  print:'https://payhip.com/b/rw1zI',   // "Print-ready diary PDF" — $2 one-off
+  tier1:'https://payhip.com/b/3YFDl',   // "Photo Plan 1 — 30 days" — $1.99
+  tier2:'https://payhip.com/b/Ad5Tg',   // "Photo Plan 2 — 30 days" — $3.99
+  tier3:'https://payhip.com/b/g1nNH'    // "Photo Plan 3 — 30 days" — $5.99
 };
 const REDEEM_URL=SUPA_URL+'/functions/v1/redeem-diary';
 const PRINT_PRICE={usd:2,zar:35};
@@ -1563,7 +1563,7 @@ async function handlePhotosAfterEntrySaved(entryId,photos){
     var path=currentUser.id+'/'+entryId+'/'+Date.now()+'_'+i+'.'+ext;
     var {error}=await mddUploadPhoto(p.file,p.printFile,path);
     if(!error){
-      urls.push(path); // DIARY-PRINT-2: entries store the storage PATH; links are signed when shown
+      urls.push(path); // DIARY-PRINT-3: entries store the storage PATH; links are signed when shown
     }else if(error.message&&error.message.toLowerCase().indexOf('row-level security')!==-1){
       // The server-side storage policy blocked this upload because the daily photo
       // limit was actually reached (catches the case where local/server counts drifted,
@@ -2663,10 +2663,10 @@ function showToast(m){var t=document.getElementById('toast');t.textContent=m;t.c
 </script>
 <script>
 /* ==========================================================================
-   DIARY-PRINT-2 — print-ready book PDFs + full cover set, emoji, private photos, install button, Payhip payments
+   DIARY-PRINT-3 — print-ready book PDFs + full cover set, emoji, private photos, install button, Payhip payments
    ========================================================================== */
 
-// ── PRIVATE PHOTOS + PRINT COPIES (DIARY-PRINT-2) ──
+// ── PRIVATE PHOTOS + PRINT COPIES (DIARY-PRINT-3) ──
 // Entries store the storage PATH of each photo ("<user id>/<entry id>/<file>"), never a public link.
 // Photos are shown through short-lived signed links, so the diary-photos bucket can be PRIVATE.
 // Old entries that still hold a full public URL are converted to a path when read.
@@ -2882,7 +2882,7 @@ function pbEnsureLib(){
 }
 
 // Standard PDF fonts only know Western characters. Emoji are kept and drawn as small colour images
-// (DIARY-PRINT-2): while measuring/wrapping text each emoji is stood in for by '‰' (exactly 1 em wide in
+// (DIARY-PRINT-3): while measuring/wrapping text each emoji is stood in for by '‰' (exactly 1 em wide in
 // Times & Helvetica), then the real emoji picture is placed in that gap. Other unknown characters are dropped.
 var PB_CP1252='€‚ƒ„…†‡ˆŠ‹ŒŽ‘’“”•–—˜™š›œžŸ', PB_PH='‰';
 var PB_EMOJI_RE=/(?:\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}[\uFE0F\uFE0E]?[\u{1F3FB}-\u{1F3FF}]?(?:\u200D\p{Extended_Pictographic}[\uFE0F\uFE0E]?[\u{1F3FB}-\u{1F3FF}]?)*)/gu;
@@ -3164,7 +3164,7 @@ function pbCover(f,meta,ph,style,color){
   return p;
 }
 
-// ---- full cover set (DIARY-PRINT-2): back + spine + front wrap, inside covers ----
+// ---- full cover set (DIARY-PRINT-3): back + spine + front wrap, inside covers ----
 var PB_INSIDE=[['plain','Plain colour'],['pattern','Dot pattern'],['bookplate','Bookplate (belongs to…)'],['photo','Photo']];
 var PB_SPINE_MIN_TEXT=6;
 function pbStyleColors(style,color){
