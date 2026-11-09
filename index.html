@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Digital Journal">
-<meta name="build" content="DIARY-PRINT-3">
+<meta name="build" content="DIARY-PRINT-4-PAYSTACK">
 <meta name="theme-color" content="#534AB7">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -863,16 +863,16 @@ const SUPA_URL='https://fzehrjppccsuiqtxbzeo.supabase.co';
 const SUPA_KEY='sb_publishable_qZY6YQvqaqGD9-GxMQSogw_CMFST2OB';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 
-// ══ ORDER_LINKS — Paystack pages TBD; for now WhatsApp Jayden to order (rand prices) ══
+// ══ ORDER_LINKS — Paystack card payment pages (rand). Paid with your journal email → unlocked on your account (checked hourly) ══
 // No card details ever go in this file. Redeem codes still use Supabase Edge Function secrets.
 const SHOP_URL='https://verkerkand-cyber.github.io/app-stream-prints/';
-const WA_ORDER=(item)=> 'https://wa.me/27662392340?text='+encodeURIComponent('Hi Jayden, I want to buy My Digital Journal — '+item+' (Paystack).');
+const PAYSTACK='https://paystack.shop/pay/';
 const ORDER_LINKS={
-  print: WA_ORDER('Print-ready diary PDF (R40)'),
-  customise: WA_ORDER('Journal customise / cover download (R55)'),
-  tier1: WA_ORDER('Photo Plan 1 — 30 days (R35)'),
-  tier2: WA_ORDER('Photo Plan 2 — 30 days (R70)'),
-  tier3: WA_ORDER('Photo Plan 3 — 30 days (R110)')
+  print: PAYSTACK+'journal-print-pdf',          // R40
+  customise: PAYSTACK+'journal-customise',      // R55
+  tier1: PAYSTACK+'journal-photo-plan-1',       // R35 / 30 days
+  tier2: PAYSTACK+'journal-photo-plan-2',       // R70 / 30 days
+  tier3: PAYSTACK+'journal-photo-plan-3'        // R110 / 30 days
 };
 const PAYHIP_LINKS=ORDER_LINKS; // keep old name so existing helpers keep working until renamed below
 const REDEEM_URL=SUPA_URL+'/functions/v1/redeem-diary';
@@ -1911,7 +1911,7 @@ function updatePreviewNav(){
 
 function flipPreview(dir){var n=prevPageIndex+dir;if(n<0||n>=prevPages.length)return;prevPageIndex=n;updatePreviewNav();}
 function closePreview(){document.getElementById('prev-overlay').classList.remove('show');}
-function initPayment(t){closePreview();if(t==='print'){var c=document.getElementById('print-card');if(c)c.scrollIntoView({behavior:'smooth'});pbDownload();return;}showToast('💳 Order via WhatsApp — from R40');}
+function initPayment(t){closePreview();if(t==='print'){var c=document.getElementById('print-card');if(c)c.scrollIntoView({behavior:'smooth'});pbDownload();return;}if(payCanBuy(t)){payBuy(t);return;}showToast('💳 Pay by card with Paystack — from R40');}
 
 // ── SETTINGS ──
 function loadVoices(){
@@ -2614,11 +2614,10 @@ function showUpgradeModal(reason){
       '<button onclick="closeUpgradeModal()" style="width:100%;padding:12px;background:none;color:#888;border:none;">Maybe later</button>'+
     '</div>';
   document.body.appendChild(modal);
-  payCheckLive().then(function(live){
+  Promise.resolve(true).then(function(live){ // Paystack pages are always available (9 Nov 2026)
     if(!document.getElementById('upgrade-modal')) return;
-    if(!live){ document.getElementById('upg-soon').innerHTML=payComingSoonHtml(); return; }
-    document.getElementById('upg-code').style.display='';
-    document.querySelectorAll('.upg-buy').forEach(function(b){ if(payCanBuy(b.dataset.tier)){ b.classList.remove('soon'); b.textContent='Order via WhatsApp'; } });
+    var us=document.getElementById('upg-soon'); if(us) us.innerHTML='<div class="pay-p" style="font-size:13px">💳 Pay with the <b>same email as your journal login</b>. Your plan unlocks on your account within a few hours (7am–10pm). Then close and reopen the app.</div>';
+    document.querySelectorAll('.upg-buy').forEach(function(b){ if(payCanBuy(b.dataset.tier)){ b.classList.remove('soon'); b.textContent='Pay by card'; } });
   });
 }
 
@@ -2627,7 +2626,7 @@ function closeUpgradeModal(){
   if(m) m.remove();
 }
 
-// Photo plans are ordered via WhatsApp / Paystack (no card details touch this app). The buyer gets a code by
+// Photo plans are paid via Paystack payment pages (no card details touch this app). The buyer gets a code by
 // email and redeems it with "I have a code"; the redeem-diary edge function sets photo_tier +
 // tier_expires_at on the server. (The old PayFast sandbox checkout was removed: it needed its
 // passphrase inside this public file.)
@@ -2764,7 +2763,7 @@ function installApp(){
 // Register the service worker on every load (not only after sign-in) so Chrome offers install.
 window.addEventListener('load',function(){ try{ registerServiceWorker(); }catch(e){} mddInstallUI(); });
 
-// ── PAYMENTS (WhatsApp order + redeem-diary edge function) ──
+// ── PAYMENTS (Paystack payment pages + redeem-diary edge function) ──
 var PAY_STATE={checked:false,live:false,checking:null};
 function payCheckLive(force){
   if(PAY_STATE.checked && !force) return Promise.resolve(PAY_STATE.live);
@@ -2777,13 +2776,13 @@ function payCheckLive(force){
     .then(function(){ clearTimeout(tm); PAY_STATE.checked=true; PAY_STATE.checking=null; return PAY_STATE.live; });
   return PAY_STATE.checking;
 }
-function payCanBuy(product){ return !!ORDER_LINKS[product]; } // WhatsApp order links always available; Paystack pages TBD
+function payCanBuy(product){ return !!ORDER_LINKS[product]; } // Paystack pages live since 9 Nov 2026
 function payBuy(product){
   if(!payCanBuy(product)){ showToast('💳 Payments coming soon'); return; }
   var url=ORDER_LINKS[product]||SHOP_URL, w=null;
   try{ w=window.open(url,'_blank','noopener'); }catch(e){}
   if(!w){ var a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }
-  showToast('🛒 Opening WhatsApp… your code arrives by email');
+  showToast('💳 Opening Paystack… use your journal email so we can unlock it for you');
 }
 function payModal(html){
   var old=document.getElementById('pay-modal'); if(old) old.remove();
@@ -2797,7 +2796,7 @@ function payComingSoonHtml(){
   return '<div class="pay-soon">💳 <b>Payments coming soon.</b> Buying isn\'t switched on yet — nothing will be charged. Check back shortly!</div>';
 }
 function payRedeemModal(back){
-  var m=payModal('<h3>🎟️ Redeem your code</h3><p class="pay-p">After paying (Paystack / WhatsApp order) you get a code by email. Type it here — it unlocks on <b>this account</b> (works on all your devices). Each code works once.</p>'+
+  var m=payModal('<h3>🎟️ Redeem your code</h3><p class="pay-p">After paying with Paystack you get a code by email (use the same email as your journal account). Type it here — it unlocks on <b>this account</b> (works on all your devices). Each code works once.</p>'+
     '<input id="pay-code" class="pay-input" maxlength="60" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="YOUR CODE">'+
     '<button class="pay-btn" id="pay-code-go">Redeem</button><p class="pay-msg" id="pay-code-msg"></p>'+
     '<button class="pay-later" id="pay-code-back">◀ Back</button>');
@@ -3632,10 +3631,9 @@ function pbDownload(){
 }
 async function pbShowPrintPay(){
   payModal('<h3>🖨️ Print-ready PDF</h3><p class="pay-p">One-off <b>R'+PRINT_PRICE.zar+'</b>. Unlocks print PDF downloads for your account — every size, as often as you like. The preview stays free.</p><div id="pay-body"><p class="pay-p">Checking…</p></div><button class="pay-later" onclick="payCloseModal()">Maybe later</button>');
-  var live=await payCheckLive(); var body=document.getElementById('pay-body'); if(!body) return;
-  if(!live){ body.innerHTML=payComingSoonHtml(); return; }
-  body.innerHTML=(payCanBuy('print')?'<button class="pay-btn" onclick="payBuy(\'print\')">Order via WhatsApp — R'+PRINT_PRICE.zar+'</button>':payComingSoonHtml())+
-    '<button class="pay-code-btn" onclick="payRedeemModal(pbShowPrintPay)">🎟️ I have a code</button>';
+  var body=document.getElementById('pay-body'); if(!body) return;
+  body.innerHTML=(payCanBuy('print')?'<button class="pay-btn" onclick="payBuy(\'print\')">Pay by card — R'+PRINT_PRICE.zar+'</button>':payComingSoonHtml())+
+    '<p class="pay-p" style="font-size:13px">Pay with the <b>same email as your journal login</b>. Print downloads unlock on your account within a few hours (7am–10pm). Then close and reopen the app.</p>';
 }
 async function pbMakePdf(){
   if(PB.busy) return;
