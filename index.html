@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Digital Journal">
-<meta name="build" content="DIARY-PRINT-4-PAYSTACK">
+<meta name="build" content="DIARY-PRINT-5-LOGINFIX">
 <meta name="theme-color" content="#534AB7">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -3572,7 +3572,7 @@ function pbOpt(){
 }
 function pbUpdatePriceUI(){
   var b=document.getElementById('pb-dl-btn'); if(!b) return;
-  b.textContent=pbIsUnlocked()?'⬇ Download print PDF':'⬇ Download print PDF — R'+PRINT_PRICE.zar+';
+  b.textContent=pbIsUnlocked()?'⬇ Download print PDF':'⬇ Download print PDF — R'+PRINT_PRICE.zar;
   var st=document.getElementById('pb-unlocked'); if(st) st.style.display=pbIsUnlocked()?'block':'none';
   var tp=document.getElementById('exp-tier1-price'); if(tp) tp.textContent=TIER_PRICES.tier1;
 }
