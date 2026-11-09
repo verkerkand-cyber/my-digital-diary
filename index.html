@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Digital Journal">
-<meta name="build" content="DIARY-PRINT-5-LOGINFIX">
+<meta name="build" content="DIARY-PRINT-6-PAY2">
 <meta name="theme-color" content="#534AB7">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -2777,13 +2777,23 @@ function payCheckLive(force){
   return PAY_STATE.checking;
 }
 function payCanBuy(product){ return !!ORDER_LINKS[product]; } // Paystack pages live since 9 Nov 2026
+var CHECKOUT_URL=SUPA_URL+'/functions/v1/create-checkout'; // DIARY-PAY-2: checkout tied to the signed-in account
 function payBuy(product){
   if(!payCanBuy(product)){ showToast('💳 Payments coming soon'); return; }
-  var url=ORDER_LINKS[product]||SHOP_URL, w=null;
-  try{ w=window.open(url,'_blank','noopener'); }catch(e){}
-  if(!w){ var a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove(); }
-  showToast('💳 Opening Paystack… use your journal email so we can unlock it for you');
+  var fallback=ORDER_LINKS[product]||SHOP_URL, w=null;
+  try{ w=window.open('','_blank'); if(w){ try{ w.opener=null; w.document.title='Opening checkout…'; w.document.body.innerHTML='<p style="font:16px sans-serif;padding:24px">Opening secure Paystack checkout…</p>'; }catch(e){} } }catch(e){}
+  function go(url){ if(w && !w.closed){ try{ w.location.href=url; return; }catch(e){} } location.href=url; }
+  showToast('💳 Opening secure Paystack checkout…');
+  if(product==='customise' || !currentUser){ go(fallback); return; }
+  sb.auth.getSession().then(function(r){
+    var tok=r&&r.data&&r.data.session&&r.data.session.access_token; if(!tok){ go(fallback); return; }
+    return fetch(CHECKOUT_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+tok},body:JSON.stringify({product:product, back:location.href.split('#')[0]})})
+      .then(function(x){ return x.json(); }).then(function(j){ go(j&&j.ok&&j.url?j.url:fallback); });
+  }).catch(function(){ go(fallback); });
 }
+// DIARY-PAY-2: when the buyer comes back from the checkout tab, reload their plan so the unlock shows straight away
+var __tierAt=0; function tierOnReturn(){ if(!currentUser || Date.now()-__tierAt<8000) return; __tierAt=Date.now(); try{ if(typeof loadUserTier==='function') loadUserTier(); }catch(e){} }
+window.addEventListener('focus',tierOnReturn); document.addEventListener('visibilitychange',function(){ if(!document.hidden) tierOnReturn(); });
 function payModal(html){
   var old=document.getElementById('pay-modal'); if(old) old.remove();
   var m=document.createElement('div'); m.id='pay-modal'; m.className='pay-modal';
