@@ -5,7 +5,7 @@
 //    the cache is only a fallback. Supabase / CDN requests are never cached here.
 // This file MUST be served from the same folder as index.html for its scope to cover the app.
 
-var CACHE = 'mdd-shell-v2';
+var CACHE = 'mdd-shell-v3';
 var SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png',
              './icon-maskable-512.png', './apple-touch-icon.png'];
 
@@ -27,7 +27,7 @@ self.addEventListener('fetch', function(event){
   var req = event.request;
   if(req.method !== 'GET') return;
   var url = new URL(req.url);
-  if(url.origin !== self.location.origin) return; // Supabase, CDNs, Payhip: straight to network
+  if(url.origin !== self.location.origin) return; // Supabase, CDNs, Paystack: straight to network
   var isPage = req.mode === 'navigate' || /\/(index\.html)?$/.test(url.pathname);
   if(isPage){
     // network-first so updates arrive immediately; cached copy only when offline
