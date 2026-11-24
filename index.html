@@ -676,13 +676,13 @@ textarea.pb-in{resize:vertical;min-height:64px;}
           </div>
           <div class="cust-actions">
             <button class="cust-btn" onclick="showPreview()">👁 Preview</button>
-            <button class="cust-btn primary" onclick="initPayment('customise')">Order · R55</button>
+            <button class="cust-btn primary" onclick="initPayment('customise')">Order · R55 (~$3.3 USD)</button>
           </div>
         </div>
       </div>
       <div class="exp-card pb-card" id="print-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px"><h3>📚 Print your diary as a book</h3><span class="exp-badge gold">R40</span></div>
-        <p>Make a print-ready PDF for any print shop or online photo-book printer — 3&nbsp;mm bleed, 300&nbsp;dpi photos, page numbers and date headings. <b>Preview is free</b>; the download is a one-off <b>R40</b>.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px"><h3>📚 Print your diary as a book</h3><span class="exp-badge gold">R40 (~$2.4 USD)</span></div>
+        <p>Make a print-ready PDF for any print shop or online photo-book printer — 3&nbsp;mm bleed, 300&nbsp;dpi photos, page numbers and date headings. <b>Preview is free</b>; the download is a one-off <b>R40 (~$2.4 USD)</b>.</p>
         <div class="pb-unlocked" id="pb-unlocked">✔ Print PDF unlocked on your account</div>
 
         <div class="pb-step">1 · Book size</div>
@@ -742,7 +742,7 @@ textarea.pb-in{resize:vertical;min-height:64px;}
 
         <div class="pb-actions">
           <button type="button" class="pb-prev-btn" id="pb-prev-btn" onclick="pbPreview()">👁 Preview pages (free)</button>
-          <button type="button" class="pb-dl-btn" id="pb-dl-btn" onclick="pbDownload()">⬇ Download print PDF — R40</button>
+          <button type="button" class="pb-dl-btn" id="pb-dl-btn" onclick="pbDownload()">⬇ Download print PDF — R40 (~$2.4 USD)</button>
         </div>
         <div class="pb-prog" id="pb-prog"><div class="pb-prog-track"><div class="pb-prog-bar" id="pb-prog-bar"></div></div><div class="pb-prog-label" id="pb-prog-label"></div></div>
         <div id="pb-out"></div>
@@ -846,7 +846,7 @@ textarea.pb-in{resize:vertical;min-height:64px;}
     </div>
     <div class="prev-footer">
       <button class="prev-close-footer" onclick="closePreview()">Close</button>
-      <button class="prev-pay-btn" onclick="initPayment('customise')">Order · R55 &amp; Download</button>
+      <button class="prev-pay-btn" onclick="initPayment('customise')">Order · R55 (~$3.3 USD) &amp; Download</button>
     </div>
   </div>
 </div>
@@ -868,14 +868,14 @@ const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 const SHOP_URL='https://verkerkand-cyber.github.io/app-stream-prints/';
 const PAYSTACK='https://paystack.shop/pay/';
 const ORDER_LINKS={
-  print: PAYSTACK+'journal-print-pdf',          // R40
-  customise: PAYSTACK+'journal-customise',      // R55
-  tier1: PAYSTACK+'journal-photo-plan-1',       // R35 / 30 days
-  tier2: PAYSTACK+'journal-photo-plan-2',       // R70 / 30 days
-  tier3: PAYSTACK+'journal-photo-plan-3'        // R110 / 30 days
+  print: PAYSTACK+'journal-print-pdf',          // R40 (~$2.4 USD)
+  customise: PAYSTACK+'journal-customise',      // R55 (~$3.3 USD)
+  tier1: PAYSTACK+'journal-photo-plan-1',       // R35 (~$2.1 USD) / 30 days
+  tier2: PAYSTACK+'journal-photo-plan-2',       // R70 (~$4.2 USD) / 30 days
+  tier3: PAYSTACK+'journal-photo-plan-3'        // R110 (~$7 USD) / 30 days
 };
 const REDEEM_URL=SUPA_URL+'/functions/v1/redeem-diary';
-const PRINT_PRICE={usd:2,zar:40}; // ~R40 one-off print PDF
+const PRINT_PRICE={usd:2,zar:40}; // ~R40 (~$2.4 USD) one-off print PDF
 
 // ── CAPTCHA (Cloudflare Turnstile) ──
 // Required because Supabase's "Enable Captcha protection" setting now expects a
@@ -1910,7 +1910,7 @@ function updatePreviewNav(){
 
 function flipPreview(dir){var n=prevPageIndex+dir;if(n<0||n>=prevPages.length)return;prevPageIndex=n;updatePreviewNav();}
 function closePreview(){document.getElementById('prev-overlay').classList.remove('show');}
-function initPayment(t){closePreview();if(t==='print'){var c=document.getElementById('print-card');if(c)c.scrollIntoView({behavior:'smooth'});pbDownload();return;}if(payCanBuy(t)){payBuy(t);return;}showToast('💳 Pay by card with Paystack — from R40');}
+function initPayment(t){closePreview();if(t==='print'){var c=document.getElementById('print-card');if(c)c.scrollIntoView({behavior:'smooth'});pbDownload();return;}if(payCanBuy(t)){payBuy(t);return;}showToast('💳 Pay by card with Paystack — from R40 (~$2.4 USD)');}
 
 // ── SETTINGS ──
 function loadVoices(){
@@ -2308,7 +2308,7 @@ var userTier={
 };
 
 var TIER_LIMITS={ free:2, tier1:3, tier2:6, tier3:10 };
-var TIER_PRICES={ tier1:'R35 / 30 days', tier2:'R70 / 30 days', tier3:'R110 / 30 days' };
+var TIER_PRICES={ tier1:'R35 (~$2.1 USD) / 30 days', tier2:'R70 (~$4.2 USD) / 30 days', tier3:'R110 (~$7 USD) / 30 days' };
 // ZAR amounts for PayFast, which only processes Rand. Rounded to clean numbers rather than
 // chasing exact USD-to-ZAR conversion to the cent, since exchange rates fluctuate daily —
 // these are independent, fixed prices, not a live currency conversion.
@@ -3581,7 +3581,7 @@ function pbOpt(){
 }
 function pbUpdatePriceUI(){
   var b=document.getElementById('pb-dl-btn'); if(!b) return;
-  b.textContent=pbIsUnlocked()?'⬇ Download print PDF':'⬇ Download print PDF — R'+PRINT_PRICE.zar;
+  b.textContent=pbIsUnlocked()?'⬇ Download print PDF':'⬇ Download print PDF — R'+PRINT_PRICE.zar+' (~$2.4 USD)';
   var st=document.getElementById('pb-unlocked'); if(st) st.style.display=pbIsUnlocked()?'block':'none';
   var tp=document.getElementById('exp-tier1-price'); if(tp) tp.textContent=TIER_PRICES.tier1;
 }
@@ -3639,9 +3639,9 @@ function pbDownload(){
   pbMakePdf();
 }
 async function pbShowPrintPay(){
-  payModal('<h3>🖨️ Print-ready PDF</h3><p class="pay-p">One-off <b>R'+PRINT_PRICE.zar+'</b>. Unlocks print PDF downloads for your account — every size, as often as you like. The preview stays free.</p><div id="pay-body"><p class="pay-p">Checking…</p></div><button class="pay-later" onclick="payCloseModal()">Maybe later</button>');
+  payModal('<h3>🖨️ Print-ready PDF</h3><p class="pay-p">One-off <b>R'+PRINT_PRICE.zar+' (~$2.4 USD)</b>. Unlocks print PDF downloads for your account — every size, as often as you like. The preview stays free.</p><div id="pay-body"><p class="pay-p">Checking…</p></div><button class="pay-later" onclick="payCloseModal()">Maybe later</button>');
   var body=document.getElementById('pay-body'); if(!body) return;
-  body.innerHTML=(payCanBuy('print')?'<button class="pay-btn" onclick="payBuy(\'print\')">Pay by card — R'+PRINT_PRICE.zar+'</button>':payComingSoonHtml())+
+  body.innerHTML=(payCanBuy('print')?'<button class="pay-btn" onclick="payBuy(\'print\')">Pay by card — R'+PRINT_PRICE.zar+' (~$2.4 USD)</button>':payComingSoonHtml())+
     '<p class="pay-p" style="font-size:13px">Pay with the <b>same email as your journal login</b>. Print downloads unlock on your account within a few hours (7am–10pm). Then close and reopen the app.</p>';
 }
 async function pbMakePdf(){
